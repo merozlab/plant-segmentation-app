@@ -29,6 +29,10 @@ REQUIRED_PACKAGES = [
     "hydra-core>=1.3.2",
     "iopath>=0.1.10",
     "pillow>=9.4.0",
+    "streamlit==1.40.0",
+    "scipy>=1.14.1",
+    "stqdm>=0.0.5",
+    "streamlit-image-annotation>=0.4.0",
 ]
 
 EXTRA_PACKAGES = {
