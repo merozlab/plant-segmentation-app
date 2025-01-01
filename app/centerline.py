@@ -54,10 +54,10 @@ def centerline():
         ]
     # st.number_input("Length scale", step=None)
     start_points_dict = st.session_state["result_dict_init"]
-    if not all([v["points"] for v in start_points_dict.values()]):
+    st.json(start_points_dict)
+    if not any([v["points"] for v in start_points_dict.values()]):
         st.warning("Please select all start point")
         st.stop()
-    # start_x, start_y = start_coords[0]
     st.write("### Results")
     centerlines = []
     start_coords = (

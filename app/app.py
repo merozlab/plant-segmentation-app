@@ -3,26 +3,13 @@ import numpy as np
 from PIL import Image
 import streamlit as st
 import uuid
-import cv2
 import time
-from streamlit_image_annotation import pointdet, detection
-from helpers import (
-    create_tagged_frame,
-    load_vid,
-    load_model,
-)
+from streamlit_image_annotation import pointdet
+from helpers import create_tagged_frame, load_vid, load_model, save_masks
 from queue_manager import add_job, get_queue_position
-from mask_to_curvature import (
-    get_arclength,
-    get_contours,
-    get_centerline,
-    find_closest_point,
-    display_centerlines,
-    get_tip_angles,
-)
-import matplotlib.pyplot as plt
 from centerline import centerline
 from review_masks import review_masks
+import shutil
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 os.environ["TORCH_ALLOW_TF32_CUDA"] = "1"
@@ -67,10 +54,6 @@ mask_tab, review_mask_tab, centerline_tab = st.tabs(
 )
 with mask_tab:
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-    # choose the number of objects to annotate
-    # choose the frame to annotate
-    # ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers) # TODO: track multiple objects
-
     ann_frame_idx = st.select_slider("Frame Index", options=range(len(frame_names)))
 
     # annotation plugin
@@ -84,8 +67,7 @@ with mask_tab:
         st.session_state["result_dict"] = result_dict.copy()
 
     target_image_path = str(video_dir / frame_names[ann_frame_idx])
-    # if not os.path.exists(target_image_path):
-    #     os.makedirs(target_image_path)
+
     new_labels = pointdet(
         image_path=target_image_path,
         label_list=label_list,
@@ -106,13 +88,6 @@ with mask_tab:
     all_points = {
         k: v for k, v in st.session_state["result_dict"].items() if v["points"] != []
     }
-    # if all_points:
-    #     objs_tagged = len(
-    #         set([d for d in all_points[ann_frame_idx]["labels"] if d % 2 == 0])
-    #     )
-    #     if not_all_objs := (objs_tagged != n_objects):
-    #         st.warning("Please annotate all objects")
-    #         st.stop()
     if sm := st.button("Show masks", disabled=(not all_points)):
         # Initialize the predictor if it doesn't exist in session_state
         if "predictor" not in st.session_state:
@@ -148,7 +123,6 @@ with mask_tab:
                 st.session_state["annotations"] = annotations
                 st.session_state["inference_state"] = inference_state
                 st.session_state["predictor"] = predictor
-                # st.write(list(inference_state.keys()))
             # show the results on the current (interacted) frame
             masks = {
                 obj_id: (mask[0] > 0.0).cpu().numpy()
@@ -164,47 +138,8 @@ with mask_tab:
                     save=True,
                     save_dir=video_dir / "tagged",
                 )
-        # run propagation throughout the video and collect the results in a dict
-        # video_segments contains the per-frame segmentation results
     if st.button("Propogate through video", disabled=(not sm)):
-        # video_segments = (
-        #     {}
-        # )  # video_segments contains the per-frame segmentation results
-        # for (
-        #     out_frame_idx,
-        #     out_obj_ids,
-        #     out_mask_logits,
-        # ) in predictor.propagate_in_video(inference_state):
-        #     (video_dir / "masks").mkdir(exist_ok=True)
-        #     for ooid in out_obj_ids:
-        #         save_dir = video_dir / "masks" / f"object_{ooid}"
-        #         save_dir.mkdir(exist_ok=True)
-        #     video_segments[out_frame_idx] = {
-        #         out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
-        #         for i, out_obj_id in enumerate(out_obj_ids)
-        #     }
 
-        #     for out_obj_id, mask in video_segments[out_frame_idx].items():
-        #         create_tagged_frame(
-        #             video_dir,
-        #             frame_names[out_frame_idx],
-        #             {
-        #                 k: v
-        #                 for k, v in video_segments[out_frame_idx].items()
-        #                 if k == out_obj_id
-        #             },
-        #             annotations=annotations,
-        #             save=True,
-        #             save_dir=video_dir / "masks" / f"object_{out_obj_id}",
-        #             bw=True,
-        #             display=False,
-        #         )
-
-        # shutil.make_archive(
-        #     str(video_dir / "masks"), "zip", str(video_dir / "masks")
-        # )
-        # predictor = st.session_state["predictor"]
-        # inference_state = st.session_state["inference_state"]
         job_id = str(uuid.uuid4())
         print("Job ID:", job_id)
         # Create a Job object and enqueue it
@@ -219,23 +154,21 @@ with mask_tab:
                 "frame_names": frame_names,
             },
         )
-        # queue_position = get_queue_position(job.job_id)
-        # st.success(f"Job {job.job_id} is at position {queue_position} in the queue.")
-        # while not job.done.is_set():
-        #     if queue_position != (new_queue_position := get_queue_position(job.job_id)):
-        #         queue_position = new_queue_position
-        #         st.success(
-        #             f"Job {job.job_id} is at position {queue_position} in the queue."
-        #         )
-        #     time.sleep(20)
-
-        # Wait until the worker completes this job
-        with st.spinner("Processing..."):
-            job.done.wait()  # blocks until worker sets `done`
+        queue_position = get_queue_position(job.job_id)
+        st.success(f"Job {job.job_id} is at position {queue_position} in the queue.")
+        while not job.done.is_set():
+            if queue_position != (new_queue_position := get_queue_position(job.job_id)):
+                queue_position = new_queue_position
+                st.success(
+                    f"Job {job.job_id} is at position {queue_position} in the queue."
+                )
+            time.sleep(20)
 
         # Once done, we can display the result
-        st.success(f"{job.result}")
-
+        video_segments = job.result
+        save_masks(video_segments, video_dir)
+        st.success("Propagation complete!")
+        shutil.make_archive(str(video_dir / "masks"), "zip", str(video_dir / "masks"))
         # Provide a download button for the zip file
         with open(str(video_dir / "masks.zip"), "rb") as fp:
             st.download_button(

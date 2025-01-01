@@ -4,6 +4,7 @@ import time
 from helpers import create_tagged_frame
 import shutil
 from datetime import datetime
+import streamlit as st
 
 
 # A "job" might be a dict with user data, plus a way to store results.
@@ -43,37 +44,23 @@ def worker():
 
 def run_sam2_inference(video_dir, predictor, inference_state, annotations, frame_names):
     video_segments = {}  # video_segments contains the per-frame segmentation results
-    for (
-        out_frame_idx,
-        out_obj_ids,
-        out_mask_logits,
-    ) in predictor.propagate_in_video(inference_state):
-        (video_dir / "masks").mkdir(exist_ok=True)
+    mask_dirs = {}  # Cache directories to avoid repeated mkdir calls
+    # Create all necessary directories beforehand
+    (video_dir / "masks").mkdir(exist_ok=True)
+    for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
+        inference_state
+    ):
         for ooid in out_obj_ids:
-            save_dir = video_dir / "masks" / f"object_{ooid}"
-            save_dir.mkdir(exist_ok=True)
+            if ooid not in mask_dirs:
+                save_dir = video_dir / "masks" / f"object_{ooid}"
+                save_dir.mkdir(exist_ok=True)
+                mask_dirs[ooid] = save_dir
+
         video_segments[out_frame_idx] = {
             out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
             for i, out_obj_id in enumerate(out_obj_ids)
         }
-
-        for out_obj_id, mask in video_segments[out_frame_idx].items():
-            create_tagged_frame(
-                video_dir,
-                frame_names[out_frame_idx],
-                {
-                    k: v
-                    for k, v in video_segments[out_frame_idx].items()
-                    if k == out_obj_id
-                },
-                annotations=annotations,
-                save=True,
-                save_dir=video_dir / "masks" / f"object_{out_obj_id}",
-                bw=True,
-                display=False,
-            )
-        shutil.make_archive(str(video_dir / "masks"), "zip", str(video_dir / "masks"))
-    return "Done"
+    return video_segments
 
 
 def get_queue_position(job_id):

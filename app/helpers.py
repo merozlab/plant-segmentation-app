@@ -11,6 +11,7 @@ from tqdm import tqdm
 import zipfile
 import torch
 from sam2.build_sam import build_sam2_video_predictor
+from stqdm import stqdm
 
 
 def split_vid_to_frames(video_path, video_dir):
@@ -216,6 +217,17 @@ def create_masked_video(
 BASE_PATH = Path("app/app_data")
 
 
+def save_masks(video_segments, video_dir):
+    for frame_idx, masks in stqdm(video_segments.items(), desc="Processing frames"):
+        for obj_id, mask in masks.items():
+            save_dir = video_dir / "masks" / f"object_{obj_id}"
+            mask = np.squeeze(mask)
+            if mask.ndim == 3 and mask.shape[0] == 1:
+                mask = mask[0]
+            mask_image = Image.fromarray((mask * 255).astype(np.uint8))
+            mask_image.save(save_dir / f"frame_{frame_idx:05d}.png")
+
+
 @st.dialog("Load video")
 def load_vid():
     video_dir = None
@@ -298,11 +310,7 @@ def load_model(video_dir):
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
     elif device.type == "mps":
-        print(
-            "\nSupport for MPS devices is preliminary. SAM 2 is trained with CUDA and might "
-            "give numerically different outputs and sometimes degraded performance on MPS. "
-            "See e.g. https://github.com/pytorch/pytorch/issues/84936 for a discussion."
-        )
+        print("Support for MPS devices is preliminary")
     predictor = build_sam2_video_predictor(
         model_cfg, sam2_checkpoint, device=device, vos_optimized=False
     )
