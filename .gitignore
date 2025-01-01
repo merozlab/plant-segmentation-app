@@ -10,3 +10,10 @@ outputs/*
 checkpoints/*.pt
 app/app_data/*
 demo/backend/checkpoints/*.pt
+
+app/app_data/*
+
+# Poetry
+.poetry/
+poetry.lock
+__pypackages__/

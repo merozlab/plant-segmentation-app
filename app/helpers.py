@@ -279,8 +279,8 @@ def load_vid():
 
 
 def load_model(video_dir):
-    sam2_checkpoint = "checkpoints/sam2.1_hiera_base_plus.pt"
-    model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+    sam2_checkpoint = "checkpoints/sam2.1_hiera_large.pt"
+    model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
     # select the device for computation
     if torch.cuda.is_available():
         device = torch.device("cuda")
