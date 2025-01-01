@@ -8,4 +8,8 @@ build/*
 _C.*
 outputs/*
 checkpoints/*.pt
+<<<<<<< HEAD
 app/app_data/*
+=======
+demo/backend/checkpoints/*.pt
+>>>>>>> 2b90b9f5ceec907a1c18123530e92e794ad901a4
