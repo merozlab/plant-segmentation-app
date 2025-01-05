@@ -74,7 +74,8 @@ def upload_folder():
         with open(folder_path, "wb") as f:
             f.write(folder.getbuffer())
         st.success(f"Saved file: {folder_path}")
-        video_dir = BASE_PATH / folder_path.stem
+        folder_name = st.text_input("Folder name", value=folder_path.stem)
+        video_dir = BASE_PATH / folder_name
         if not video_dir.exists():
             video_dir.mkdir()
             with zipfile.ZipFile(folder_path, "r") as zip_ref:
@@ -90,19 +91,19 @@ def upload_folder():
                     first_subfolder = subfolders[0]
                     # Move images from the first subfolder to the parent folder
                     for file in first_subfolder.iterdir():
-                        if file.suffix in [".jpg", ".jpeg", ".JPG", ".JPEG"]:
+                        if file.suffix.lower() in [".jpg", ".jpeg", ".png"]:
                             file.rename(video_dir / file.name)
                     # Remove the subfolder
                     first_subfolder.rmdir()
             # Rename files to 00001, 00002, etc.
             for idx, file in enumerate(sorted(video_dir.iterdir())):
-                new_name = video_dir / f"{idx:05d}{file.suffix}"
+                new_name = video_dir / f"{idx:05d}.jpg"
                 file.rename(new_name)
             # video_dir = split_vid_to_frames(folder_path, video_dir)
             folder_path.unlink()
-            return video_dir
-        else:
-            st.warning(f"Folder {folder.name} already exists")
+        return video_dir
+        # else:
+        # st.warning(f"Folder {folder.name} already exists")
 
 
 def show_mask_video(mask, ax, obj_id=None, random_color=False, bw=False):
@@ -225,7 +226,7 @@ def save_masks(video_segments, video_dir):
             if mask.ndim == 3 and mask.shape[0] == 1:
                 mask = mask[0]
             mask_image = Image.fromarray((mask * 255).astype(np.uint8))
-            mask_image.save(save_dir / f"frame_{frame_idx:05d}.png")
+            mask_image.save(save_dir / f"{frame_idx:05d}.jpg")
 
 
 @st.dialog("Load video")
@@ -259,16 +260,21 @@ def load_vid():
         st.stop()
 
     frame_names = sorted(
-        [p.name for p in video_dir.iterdir() if p.suffix.lower() in [".jpg", ".jpeg"]]
+        [
+            p.name
+            for p in video_dir.iterdir()
+            if p.suffix.lower() in [".jpg", ".jpeg", ".png"]
+        ]
     )
     rotate = st.radio(
         "Rotate image", [90, 180, 270], index=None, key="rotate", horizontal=True
     )
     flip = st.radio("Flip image", ["Horizontal", "Vertical"], index=None, key="flip")
-    if not load_video == "Upload zip folder":
-        reformat = st.checkbox(
-            "Reformat image names to 00001.jpg, 00002.jpg, etc.", value=False
-        )
+    reformat = (
+        st.checkbox("Reformat image names to 00001.jpg, 00002.jpg, etc.", value=False)
+        if not load_video == "Upload zip folder"
+        else False
+    )
     if st.button("Proceed"):
         for frame_name in frame_names:
             img = Image.open(video_dir / frame_name)

@@ -9,27 +9,26 @@ from numpy.typing import ArrayLike
 import streamlit as st
 
 
-def get_contours(image: np.ndarray) -> np.ndarray:
+def get_contours(path) -> np.ndarray:
+    image = cv2.imread(path)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # Apply binary thresholding
     _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # Get first contour
-    contours[0][:, 0, 1] = image.shape[0] - contours[0][:, 0, 1]
-    return contours[0]
+    # Get main contour
+    largest_contour = max(contours, key=cv2.contourArea)
+    # flip y axis
+    largest_contour[:, 0, 1] = image.shape[0] - largest_contour[:, 0, 1]
+    return largest_contour
 
 
-def plot_contour(contour, sides):
+def plot_contour(contour):
     x_contour, y_contour = contour[:, 0, 0], contour[:, 0, 1]
     plt.figure()
     plt.plot(x_contour, y_contour, "b-", label="Original Contour")
-    for x_uniform, y_uniform in sides:
-        plt.plot(x_uniform, y_uniform, "ro", label="Uniform Points")
-    plt.plot(x_uniform[0], y_uniform[0], "yo", label="Start")
-    plt.plot(x_uniform[-1], y_uniform[-1], "go", label="End")
     plt.legend()
     plt.axis("equal")
-    plt.show()
+    st.pyplot(plt.gcf())
 
 
 def distribute_points(x, y, n_points):

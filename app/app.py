@@ -46,7 +46,6 @@ st.session_state["frame_names"] = [
 ]
 frame_names = st.session_state["frame_names"]
 
-
 frame_0 = Image.open(video_dir / frame_names[0])
 frame_height, frame_width, _ = np.array(frame_0).shape
 mask_tab, review_mask_tab, centerline_tab = st.tabs(
