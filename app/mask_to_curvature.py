@@ -10,13 +10,20 @@ import streamlit as st
 
 
 def get_contours(path) -> np.ndarray:
+
     image = cv2.imread(path)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # Apply binary thresholding
     _, binary = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     # Get main contour
-    largest_contour = max(contours, key=cv2.contourArea)
+    #### experimental - dealing with frames where no mask was found.
+    try:
+        largest_contour = max(contours, key=cv2.contourArea)
+    except ValueError:
+        return np.array([])
+    ####
+
     # flip y axis
     largest_contour[:, 0, 1] = image.shape[0] - largest_contour[:, 0, 1]
     return largest_contour
@@ -42,7 +49,7 @@ def distribute_points(x, y, n_points):
     return x_uniform, y_uniform
 
 
-def get_centerline(contour, start_index, dist=100, display=False):
+def get_centerline(contour, start_index, dist=200, display=False):
     shifted_contour = np.concatenate((contour[start_index:], contour[:start_index]))
     x, y = shifted_contour[:, 0, 0], shifted_contour[:, 0, 1]
     x_unif, y_unif = distribute_points(x, y, dist)
@@ -69,11 +76,11 @@ def find_closest_point(contour, point):
     return int(np.argmin(distances))
 
 
-def display_centerlines(centerlines):
+def display_centerlines(centerlines, flip=1):
     # centerlines
     colors = plt.cm.viridis(np.linspace(0, 1, len(centerlines)))
     plt.figure()
-    for i, (x, y) in enumerate(centerlines):
+    for i, (x, y) in enumerate(centerlines[::flip]):
         plt.plot(x[:-2], y[:-2], color=colors[i])
     plt.title("Centerlines")
     plt.xlabel("x")

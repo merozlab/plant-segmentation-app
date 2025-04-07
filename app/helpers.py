@@ -114,7 +114,7 @@ def show_mask_video(mask, ax, obj_id=None, random_color=False, bw=False):
         color = np.array([1.0, 1.0, 1.0])
         # ax.set_facecolor("black")
     else:
-        cmap = plt.get_cmap("tab20")
+        cmap = plt.get_cmap("tab10")
         cmap_idx = 0 if obj_id is None else obj_id
         color = np.array([*cmap(cmap_idx)[:3], 0.6])
     h, w = mask.shape[-2:]
@@ -276,7 +276,7 @@ def load_vid():
         else False
     )
     if st.button("Proceed"):
-        for frame_name in frame_names:
+        for frame_name in tqdm(frame_names):
             img = Image.open(video_dir / frame_name)
             if rotate:
                 img = img.rotate(rotate, expand=True)
@@ -327,6 +327,7 @@ def load_model(video_dir):
 
 
 def test_masks():
+    ## Checks if masks folder exists
     if video_dir := st.session_state.get("video_dir"):
         if not (video_dir / "masks").exists():
             st.warning("Please segment the objects first")

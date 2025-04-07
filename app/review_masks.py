@@ -19,8 +19,8 @@ def review_masks():
     folder = video_dir / "masks" / object
     test_frame = Image.open(folder / frame_names[frame])
     st.image(test_frame)
+    kernel_size = st.number_input("Kernel size", 10, 1000, 100, 10)
     if st.button("Fix holes and gaps"):
-        kernel_size = st.number_input("Kernel size", 10, 1000, 100, 10)
         test_frame = np.array(test_frame)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
         closed_mask = cv2.morphologyEx(test_frame, cv2.MORPH_CLOSE, kernel)
