@@ -84,7 +84,7 @@ export type TrackletObject = {
   isInitialized: boolean;
 };
 
-const MAX_NUMBER_TRACKLET_OBJECTS = 3;
+const MAX_NUMBER_TRACKLET_OBJECTS = 10;
 
 export const activeTrackletObjectIdAtom = atom<number | null>(0);
 
