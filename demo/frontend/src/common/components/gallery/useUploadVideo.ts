@@ -26,7 +26,7 @@ const ACCEPT_VIDEOS = {
 };
 
 // 70 MB default max video upload size
-const MAX_FILE_SIZE_IN_MB = 70;
+const MAX_FILE_SIZE_IN_MB = 140;
 const MAX_VIDEO_UPLOAD_SIZE = MAX_FILE_SIZE_IN_MB * 1024 ** 2;
 
 type Props = {

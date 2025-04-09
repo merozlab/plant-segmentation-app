@@ -55,12 +55,9 @@ export default function TryAnotherVideoSection({onTabChange}: Props) {
 
   return (
     <div className="px-8 pb-8">
-      <div className="font-medium text-gray-300 text-base">
-        Try another video
-      </div>
       <div className="flex flex-col gap-4 mt-4">
         <UploadOption onUpload={handleVideoChange} />
-        <GalleryOption onChangeVideo={handleVideoChange} />
+        {/* <GalleryOption onChangeVideo={handleVideoChange} /> */}
       </div>
     </div>
   );
