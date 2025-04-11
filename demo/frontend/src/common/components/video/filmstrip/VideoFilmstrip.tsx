@@ -23,6 +23,7 @@ import {PtsCanvas, PtsCanvasImperative} from 'react-pts-canvas';
 import {VideoRef} from '../Video';
 import {DecodeEvent, FrameUpdateEvent} from '../VideoWorkerBridge';
 import useVideo from '../editor/useVideo';
+import { isFrameExtractionInProgressAtom } from '../../options/useDownloadVideo';
 import {
   drawFilmstrip,
   drawMarker,
@@ -51,6 +52,11 @@ const styles = stylex.create({
     cursor: 'col-resize',
     overflow: 'hidden',
   },
+  filmstripDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.7,
+    pointerEvents: 'none',
+  },
   canvas: {
     width: '100%',
     height: '100%',
@@ -66,6 +72,7 @@ export default function VideoFilmstrip() {
   const filmstripRef = useRef<ImageBitmap | null>(null);
   const isPlayingOnPointerDownRef = useRef<boolean>(false);
   const isPlaying = useAtomValue(isPlayingAtom);
+  const isFrameExtractionInProgress = useAtomValue(isFrameExtractionInProgressAtom);
 
   const {enable: enableScrolling, disable: disableScrolling} =
     useDisableScrolling();
@@ -222,7 +229,10 @@ export default function VideoFilmstrip() {
   return (
     <div {...stylex.props(styles.container)}>
       <div {...stylex.props(styles.filmstripWrapper)}>
-        <div {...stylex.props(styles.filmstrip)}>
+        <div {...stylex.props(
+          styles.filmstrip,
+          isFrameExtractionInProgress && styles.filmstripDisabled
+        )}>
           <PtsCanvas
             {...stylex.props(styles.canvas)}
             ref={ptsCanvasRef}

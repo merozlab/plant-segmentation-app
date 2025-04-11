@@ -1,5 +1,13 @@
 /**
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyright (c) Meta Platforms, Inc.   const [downloadingState, setDownloadingState] =
+    useState<DownloadingState>('default');
+  const [progress, setProgress] = useState<number>(0);
+  const [, setModalVisible] = useAtom(frameExtractionModalVisibleAtom);
+  const [, setModalProgress] = useAtom(frameExtractionProgressAtom);
+  const [, setFrameExtractionInProgress] = useAtom(isFrameExtractionInProgressAtom);
+  const { enqueueMessage, clearMessage } = useMessagesSnackbar();
+
+  const video = useVideo();liates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +26,7 @@ import {
   EncodingCompletedEvent,
   EncodingStateUpdateEvent,
 } from '@/common/components/video/VideoWorkerBridge';
+import useMessagesSnackbar from '@/common/components/snackbar/useMessagesSnackbar';
 import useVideo from '@/common/components/video/editor/useVideo';
 import {MP4ArrayBuffer} from 'mp4box';
 import {useState} from 'react';
@@ -29,6 +38,8 @@ type DownloadFormat = 'video' | 'frames';
 // Global atoms for frame extraction modal
 export const frameExtractionModalVisibleAtom = atom(false);
 export const frameExtractionProgressAtom = atom(0);
+// Global atom to track if frame extraction is in progress
+export const isFrameExtractionInProgressAtom = atom(false);
 
 type State = {
   state: DownloadingState;
@@ -40,8 +51,10 @@ export default function useDownloadVideo(): State {
   const [downloadingState, setDownloadingState] =
     useState<DownloadingState>('default');
   const [progress, setProgress] = useState<number>(0);
-  const [, setModalVisible] = useAtom(frameExtractionModalVisibleAtom);
+  const [, ] = useAtom(frameExtractionModalVisibleAtom);
   const [, setModalProgress] = useAtom(frameExtractionProgressAtom);
+  const [, setFrameExtractionInProgress] = useAtom(isFrameExtractionInProgressAtom);
+  const { enqueueMessage, clearMessage } = useMessagesSnackbar();
 
   const video = useVideo();
 
@@ -107,9 +120,19 @@ export default function useDownloadVideo(): State {
   async function saveVideoAsFrames(file: MP4ArrayBuffer, fileName: string) {
     console.log("Starting frame extraction process");
     
-    // Show the modal when starting the frame extraction
-    setModalVisible(true);
-    setModalProgress(0);
+    // Mark frame extraction as in progress to disable UI elements
+    setFrameExtractionInProgress(true);
+    
+    // Show a warning message using the snackbar
+    enqueueMessage(
+      "⚠️ Please keep this wondow open while frames are being extracted. This may take a few minutes.",
+      { 
+        expire: false,
+        showClose: false,
+        type: 'warning',
+        duration: 0 
+      }
+    );
     
     try {
       // Create a video element specifically for frame extraction
@@ -243,6 +266,17 @@ export default function useDownloadVideo(): State {
       a.href = zipUrl;
       a.download = `${fileName.replace('.mp4', '')}_frames.zip`;
       a.click();
+      
+      // Clear the warning message and show success message
+      clearMessage();
+      enqueueMessage(
+        "✅ Frame extraction complete! Your ZIP file is downloading.",
+        { type: 'info', expire: true, duration: 5000 }
+      );
+      
+      // Mark frame extraction as complete to re-enable UI
+      setFrameExtractionInProgress(false);
+      
       setTimeout(() => {
         document.body.removeChild(a);
         URL.revokeObjectURL(zipUrl);
@@ -250,6 +284,17 @@ export default function useDownloadVideo(): State {
       
       return;
     } catch (error) {
+      // Clear the warning message and show error message
+      clearMessage();
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      enqueueMessage(
+        `❌ Error extracting frames: ${errorMessage}`,
+        { type: 'warning', expire: true, duration: 7000 }
+      );
+      
+      // Mark frame extraction as complete even on error
+      setFrameExtractionInProgress(false);
+      
       console.error("Error in frame extraction:", error);
       throw error;
     }

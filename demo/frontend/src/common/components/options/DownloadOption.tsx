@@ -22,7 +22,7 @@ export default function DownloadOption() {
 
   return (
     <OptionButton
-      title="Download"
+      title="Download Video"
       Icon={Package}
       loadingProps={{
         loading: state === 'started' || state === 'encoding',
