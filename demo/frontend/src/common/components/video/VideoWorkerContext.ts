@@ -777,7 +777,7 @@ export default class VideoWorkerContext {
   private _loadWatermarkFonts() {
     const requiredFonts = [
       {
-        url: '/fonts/Inter-VariableFont.ttf',
+        url: 'public/fonts/Inter-VariableFont.ttf',
         format: 'truetype-variations',
       },
     ];

@@ -13,14 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import DownloadOption from './DownloadOption';
-import DownloadFramesOption from './DownloadFramesOption';
+import {Archive} from '@carbon/icons-react';
+import OptionButton from './OptionButton';
+import useDownloadVideo from './useDownloadVideo';
 
-export default function ShareSection() {
+export default function DownloadFramesOption() {
+  const {download, state} = useDownloadVideo();
+
   return (
-    <div className="p-5 md:p-8 flex flex-col gap-4">
-      <DownloadOption />
-      <DownloadFramesOption />
-    </div>
+    <OptionButton
+      title="Download Frames"
+      Icon={Archive}
+      loadingProps={{
+        loading: state === 'started' || state === 'encoding',
+        label: 'Extracting frames...',
+      }}
+      onClick={() => download(true, 'frames')}
+    />
   );
 }
