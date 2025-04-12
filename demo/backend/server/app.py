@@ -5,6 +5,12 @@
 
 import logging
 from typing import Any, Generator
+import json
+import numpy as np
+import cv2
+from pycocotools import mask as mask_util
+from pathlib import Path
+import zipfile
 
 from app_conf import (
     GALLERY_PATH,
@@ -81,7 +87,6 @@ def propagate_in_video() -> Response:
         "session_id": data["session_id"],
         "start_frame_index": data.get("start_frame_index", 0),
     }
-
     boundary = "frame"
     frame = gen_track_with_mask_stream(boundary, **args)
     return Response(frame, mimetype="multipart/x-savi-stream; boundary=" + boundary)
@@ -98,8 +103,26 @@ def gen_track_with_mask_stream(
             session_id=session_id,
             start_frame_index=start_frame_index,
         )
-
+        output_dir = UPLOADS_PATH / session_id
+        output_dir.mkdir(parents=True, exist_ok=True)
         for chunk in inference_api.propagate_in_video(request=request):
+            if True:
+                try:
+                    # Get frame data as JSON
+                    frame_data = json.loads(chunk.to_json())
+
+                    # Determine frame number (assuming it's in the frame data or use an index)
+                    frame_idx = frame_data.get("frame_index", -1)
+
+                    # Save to file - either as JSON or process into image if needed
+                    frame_filename = output_dir / f"frame_{frame_idx:05d}.json"
+                    with open(frame_filename, "w") as f:
+                        json.dump(frame_data, f, indent=2)
+
+                    logger.debug(f"Saved frame {frame_idx} to {frame_filename}")
+                except Exception as e:
+                    logger.error(f"Error saving frame: {str(e)}")
+
             yield MultipartResponseBuilder.build(
                 boundary=boundary,
                 headers={
@@ -111,6 +134,90 @@ def gen_track_with_mask_stream(
                 },
                 body=chunk.to_json().encode("UTF-8"),
             ).get_message()
+
+
+@app.route("/maskify", methods=["POST"])
+def maskify() -> Response:
+    data = request.json
+    should_zip = data.get("zip", True)  # Default to True if not specified
+    base = UPLOADS_PATH / data["session_id"]
+    if should_zip and (base / (data["session_id"] + "_masks.zip")).exists():
+        return send_from_directory(
+            directory=str(base),
+            path=data["session_id"] + "_masks.zip",
+            as_attachment=True,
+        )
+    # Load the JSON file with mask data
+    for file in base.glob("*.json"):
+        with open(file, "r") as f:
+            mask_data = json.load(f)
+
+        # Create an empty image with the correct dimensions
+        height, width = mask_data["results"][0]["mask"]["size"]
+        # Create a blank image (black background)
+        image = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Define colors for different objects
+        colors = [
+            (255, 0, 0),  # Red
+            (0, 255, 0),  # Green
+            (0, 0, 255),  # Blue
+            (255, 255, 0),  # Yellow
+            (255, 0, 255),  # Magenta
+            (0, 255, 255),  # Cyan
+            (255, 165, 0),  # Orange
+            (128, 0, 128),  # Purple
+            (128, 255, 0),  # Lime
+            (0, 128, 128),  # Teal
+        ]
+
+        # Process each mask
+        for i, result in enumerate(mask_data["results"]):
+            # Get the mask in RLE format
+            rle = result["mask"]
+            # Decode RLE to binary mask
+            binary_mask = mask_util.decode(rle)
+
+            # Select a color for this mask
+            color = colors[i % len(colors)]
+
+            # Apply the mask with the selected color
+            for c in range(3):
+                image[:, :, c] = np.where(binary_mask == 1, color[c], image[:, :, c])
+
+        # Save as JPG
+        # Ensure the directory exists
+        output_dir = base / "masks"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / (file.stem.replace("frame", "mask") + ".jpg")
+        cv2.imwrite(output_path, image)
+
+    if should_zip:
+
+        def zip_masks(directory: Path, zip_name: str):
+            """
+            Zip all files in a directory.
+            """
+            zip_path = directory.parent / (zip_name + ".zip")
+            zipf = zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED)
+            for file in directory.glob("*.jpg"):
+                zipf.write(file, str(file.relative_to(directory)))
+            zipf.close()
+            return zip_path
+
+        # Zip the masks directory
+        masks_dir = base / "masks"
+        zip_file_path = zip_masks(masks_dir, data["session_id"] + "_masks")
+
+        # Send the zip file
+        return send_from_directory(
+            directory=str(base),
+            path=data["session_id"] + "_masks.zip",
+            as_attachment=True,
+        )
+    else:
+        # If not zipping, return a success message or a list of the created mask paths
+        return make_response("Masks created successfully, zipping skipped.", 200)
 
 
 class MyGraphQLView(GraphQLView):

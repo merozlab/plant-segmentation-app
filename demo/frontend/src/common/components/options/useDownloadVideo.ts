@@ -1,13 +1,5 @@
 /**
- * Copyright (c) Meta Platforms, Inc.   const [downloadingState, setDownloadingState] =
-    useState<DownloadingState>('default');
-  const [progress, setProgress] = useState<number>(0);
-  const [, setModalVisible] = useAtom(frameExtractionModalVisibleAtom);
-  const [, setModalProgress] = useAtom(frameExtractionProgressAtom);
-  const [, setFrameExtractionInProgress] = useAtom(isFrameExtractionInProgressAtom);
-  const { enqueueMessage, clearMessage } = useMessagesSnackbar();
-
-  const video = useVideo();liates.
+ * Copyright (c) Meta Platforms, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +22,9 @@ import useMessagesSnackbar from '@/common/components/snackbar/useMessagesSnackba
 import useVideo from '@/common/components/video/editor/useVideo';
 import {MP4ArrayBuffer} from 'mp4box';
 import {useState} from 'react';
-import {atom, useAtom} from 'jotai';
+import {atom, useAtom, useAtomValue} from 'jotai'; // Import useAtomValue
+import { sessionAtom } from '@/demo/atoms'; // Import sessionAtom
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig'; // Import the constant
 
 type DownloadingState = 'default' | 'started' | 'encoding' | 'completed';
 type DownloadFormat = 'video' | 'frames';
@@ -51,10 +45,11 @@ export default function useDownloadVideo(): State {
   const [downloadingState, setDownloadingState] =
     useState<DownloadingState>('default');
   const [progress, setProgress] = useState<number>(0);
-  const [, ] = useAtom(frameExtractionModalVisibleAtom);
+  const [] = useAtom(frameExtractionModalVisibleAtom); // Keep setModalVisible if needed elsewhere
   const [, setModalProgress] = useAtom(frameExtractionProgressAtom);
   const [, setFrameExtractionInProgress] = useAtom(isFrameExtractionInProgressAtom);
   const { enqueueMessage, clearMessage } = useMessagesSnackbar();
+  const session = useAtomValue(sessionAtom); // Get session state
 
   const video = useVideo();
 
@@ -78,7 +73,7 @@ export default function useDownloadVideo(): State {
           } else if (format === 'frames') {
             // Keep the loading state active during frame extraction
             // Will be set to completed inside the saveVideoAsFrames function
-            saveVideoAsFrames(file, getFileName()).finally(() => {
+            saveVideoAsFrames().finally(() => {
               video?.removeEventListener('encodingCompleted', onEncodingComplete);
               video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
               setDownloadingState('completed');
@@ -117,186 +112,106 @@ export default function useDownloadVideo(): State {
     window.URL.revokeObjectURL(url);
   }
 
-  async function saveVideoAsFrames(file: MP4ArrayBuffer, fileName: string) {
-    console.log("Starting frame extraction process");
-    
-    // Mark frame extraction as in progress to disable UI elements
+  async function saveVideoAsFrames() {
+    console.log("Starting mask generation and download process");
+
+    if (!session?.id) {
+      enqueueMessage('❌ Error: No active session found.', { type: 'warning' });
+      console.error("No session ID available for maskify request");
+      setFrameExtractionInProgress(false);
+      return;
+    }
+
+    const sessionId = session.id;
+
+    // Mark process as in progress
     setFrameExtractionInProgress(true);
-    
-    // Show a warning message using the snackbar
+    setProgress(10); // Initial progress
+    setModalProgress(10);
+
+    // Show a message using the snackbar
     enqueueMessage(
-      "⚠️ Please keep this wondow open while frames are being extracted. This may take a few minutes.",
-      { 
+      "⏳ Generating masks on the server. Please keep this window open...",
+      {
         expire: false,
         showClose: false,
-        type: 'warning',
-        duration: 0 
+        type: 'info',
+        duration: 0
       }
     );
-    
+
     try {
-      // Create a video element specifically for frame extraction
-      const videoEl = document.createElement('video');
-      videoEl.playsInline = true;
-      videoEl.muted = true;
-      
-      // Convert file to blob and create URL
-      const blob = new Blob([file]);
-      const url = URL.createObjectURL(blob);
-      videoEl.src = url;
-      
-      // Wait for video to load
-      await new Promise<void>(resolve => {
-        videoEl.onloadeddata = () => resolve();
-        videoEl.load();
+      // Call the /maskify endpoint using the constant
+      const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, { // Use the imported constant
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: sessionId, zip: true }),
       });
-      
-      // Load JSZip library
-      const JSZip = (await import('jszip')).default;
-      const zip = new JSZip();
-      
-      // Get video dimensions from the video element
-      const width = videoEl.videoWidth;
-      const height = videoEl.videoHeight;
-      
-      // First check if we have access to the video object for frame count
-      if (!video) {
-        throw new Error("No video context available");
+
+      setProgress(70); // Progress after fetch call initiated
+      setModalProgress(70);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
       }
-      
-      // Get total frames from video object
-      const totalFrames = video.numberOfFrames;
-      
-      if (!width || !height || !totalFrames) {
-        throw new Error("No video dimensions or frames available");
+
+      // Get the zip file as a blob
+      const zipBlob = await response.blob();
+      console.log(`ZIP file received. Size: ${zipBlob.size} bytes`);
+      setProgress(90);
+      setModalProgress(90);
+
+      if (zipBlob.size < 100) { // Basic check if the zip seems valid
+        throw new Error(`Received ZIP file appears empty or invalid: ${zipBlob.size} bytes`);
       }
-      
-      console.log(`Video dimensions: ${width}x${height}, total frames: ${totalFrames}`);
-      
-      // Store current frame to restore later
-      const originalFrame = video.frame;
-      
-      // Create a canvas to render frames
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      
-      if (!ctx) {
-        throw new Error("Could not get canvas context");
-      }
-      
-      // Extract all frames in small batches to avoid memory issues
-      const frameCount = totalFrames;
-      let framesProcessed = 0;
-      
-      // Process frames more directly with fewer async operations
-      const batchSize = 5;
-      for (let batchStart = 0; batchStart < frameCount; batchStart += batchSize) {
-        const batchEnd = Math.min(batchStart + batchSize, frameCount);
-        console.log(`Processing batch ${batchStart} to ${batchEnd-1}`);
-        
-        // Process batch
-        for (let i = batchStart; i < batchEnd; i++) {
-          // Go to specific frame to capture it
-          video.pause();
-          video.frame = i;
-          
-          // We need to wait a moment for the frame to be rendered
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          // Use the canvas element to capture the current frame
-          const videoCanvas = video.getCanvas();
-          if (!videoCanvas) {
-            console.error(`Cannot access video canvas for frame ${i}`);
-            continue;
-          }
-          
-          // Draw from the video canvas to our canvas
-          ctx.clearRect(0, 0, width, height);
-          ctx.drawImage(videoCanvas, 0, 0, width, height);
-          
-          // Convert to blob and add to zip
-          const blob = await new Promise<Blob | null>(resolve => {
-            canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
-          });
-          
-          if (blob) {
-            const frameName = `frame_${i.toString().padStart(5, '0')}.jpg`;
-            zip.file(frameName, blob);
-            console.log(`Added ${frameName} to ZIP (${blob.size} bytes)`);
-            framesProcessed++;
-          } else {
-            console.error(`Failed to create blob for frame ${i}`);
-          }
-          
-          // Update progress in both places
-          const progressValue = Math.round((framesProcessed / frameCount) * 90);
-          setProgress(progressValue);
-          setModalProgress(progressValue);
-        }
-        
-        // No need to wait for batch completion here as we're using await directly
-      }
-      
-      console.log(`All ${framesProcessed} frames processed. Generating ZIP file...`);
-      setProgress(95);
-      
-      // Restore original frame
-      video.frame = originalFrame;
-      
-      // Generate and download ZIP
-      const zipBlob = await zip.generateAsync({ 
-        type: 'blob',
-        compression: 'STORE' // Using STORE for faster processing
-      });
-      
-      console.log(`ZIP file created. Size: ${zipBlob.size} bytes`);
-      
-      if (zipBlob.size < 1000) { // A proper ZIP with frames should be much larger
-        throw new Error(`Generated ZIP file appears empty: ${zipBlob.size} bytes`);
-      }
-      
-      setProgress(100);
-      
-      // Download the ZIP file
+
+      // Create download link for the zip file
       const zipUrl = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       document.body.appendChild(a);
       a.href = zipUrl;
-      a.download = `${fileName.replace('.mp4', '')}_frames.zip`;
+      // Use session ID for the filename, matching backend logic
+      a.download = `${sessionId}_masks.zip`;
       a.click();
-      
-      // Clear the warning message and show success message
+
+      setProgress(100);
+      setModalProgress(100);
+
+      // Clear the processing message and show success
       clearMessage();
       enqueueMessage(
-        "✅ Frame extraction complete! Your ZIP file is downloading.",
+        "✅ Masks generated! Your ZIP file is downloading.",
         { type: 'info', expire: true, duration: 5000 }
       );
-      
-      // Mark frame extraction as complete to re-enable UI
+
+      // Mark process as complete
       setFrameExtractionInProgress(false);
-      
+
+      // Clean up the URL object after a short delay
       setTimeout(() => {
         document.body.removeChild(a);
         URL.revokeObjectURL(zipUrl);
-      }, 100); // Give the browser a moment to start the download
-      
-      return;
+      }, 100);
+
     } catch (error) {
-      // Clear the warning message and show error message
+      // Clear the processing message and show error
       clearMessage();
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during mask generation/download';
       enqueueMessage(
-        `❌ Error extracting frames: ${errorMessage}`,
+        `❌ Error generating/downloading masks: ${errorMessage}`,
         { type: 'warning', expire: true, duration: 7000 }
       );
-      
-      // Mark frame extraction as complete even on error
+
+      // Mark process as complete even on error
       setFrameExtractionInProgress(false);
-      
-      console.error("Error in frame extraction:", error);
-      throw error;
+      setProgress(0); // Reset progress on error
+      setModalProgress(0);
+
+      console.error("Error in saveVideoAsFrames (maskify call):", error);
+      // Optionally re-throw or handle further if needed
     }
   }
 
