@@ -20,14 +20,52 @@ import {
   MORE_OPTIONS_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import {ChevronRight} from '@carbon/icons-react';
+import { sessionAtom } from '@/demo/atoms';
+import { useAtomValue, useAtom } from 'jotai';
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+import { ChevronRight } from '@carbon/icons-react';
+import { masksReadyAtom } from '@/common/components/options/masksReadyAtom';
+
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function EffectsToolbarBottomActions({onTabChange}: Props) {
-  function handleSwitchToMoreOptionsTab() {
+export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
+  const session = useAtomValue(sessionAtom); // Get the current session
+  const [, setMasksReady] = useAtom(masksReadyAtom); // We only need the setter here
+
+  async function handleSwitchToMoreOptionsTab() {
+    if (!session?.id) {
+      // Decide if navigation should still happen or show an error
+      // For now, let's navigate anyway but log the error
+      console.log('Session ID is not available');
+      onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
+      return;
+    }
+
+    try {
+      // Call the /maskify endpoint asynchronously
+      const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Send zip: false as we only need the server to generate masks, not zip them for download yet
+        body: JSON.stringify({ session_id: session.id, zip: false }),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Maskify request failed: ${response.status} - ${errorText}`);
+      }
+      else {
+        setMasksReady(true);
+      }
+    } catch (error) {
+      console.log('Error calling /maskify endpoint:', error);
+      // Handle error appropriately - maybe show a message to the user
+      // For now, just log the error and continue navigation
+    } 
     onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
   }
 

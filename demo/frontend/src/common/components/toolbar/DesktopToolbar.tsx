@@ -16,6 +16,7 @@
 import ObjectsToolbar from '@/common/components/annotations/ObjectsToolbar';
 import EffectsToolbar from '@/common/components/effects/EffectsToolbar';
 import MoreOptionsToolbar from '@/common/components/options/MoreOptionsToolbar';
+import CenterlineToolbar from '@/common/components/centerlines/CenterlineToolbar';
 import type {CSSProperties} from 'react';
 
 type Props = {
@@ -33,6 +34,7 @@ export default function DesktopToolbar({tabIndex, onTabChange}: Props) {
     <ObjectsToolbar key="objects" onTabChange={onTabChange} />,
     <EffectsToolbar key="effects" onTabChange={onTabChange} />,
     <MoreOptionsToolbar key="options" onTabChange={onTabChange} />,
+    <CenterlineToolbar key="centerlines" onTabChange={onTabChange} />,
   ];
 
   return (

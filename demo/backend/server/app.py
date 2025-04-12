@@ -139,14 +139,7 @@ def gen_track_with_mask_stream(
 @app.route("/maskify", methods=["POST"])
 def maskify() -> Response:
     data = request.json
-    should_zip = data.get("zip", True)  # Default to True if not specified
     base = UPLOADS_PATH / data["session_id"]
-    if should_zip and (base / (data["session_id"] + "_masks.zip")).exists():
-        return send_from_directory(
-            directory=str(base),
-            path=data["session_id"] + "_masks.zip",
-            as_attachment=True,
-        )
     # Load the JSON file with mask data
     for file in base.glob("*.json"):
         with open(file, "r") as f:
@@ -191,34 +184,27 @@ def maskify() -> Response:
         output_dir.mkdir(parents=True, exist_ok=True)
         output_path = output_dir / (file.stem.replace("frame", "mask") + ".jpg")
         cv2.imwrite(output_path, image)
+    return make_response("Masks created successfully, zipping skipped.", 200)
 
-    if should_zip:
 
-        def zip_masks(directory: Path, zip_name: str):
-            """
-            Zip all files in a directory.
-            """
-            zip_path = directory.parent / (zip_name + ".zip")
-            zipf = zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED)
-            for file in directory.glob("*.jpg"):
-                zipf.write(file, str(file.relative_to(directory)))
-            zipf.close()
-            return zip_path
-
-        # Zip the masks directory
-        masks_dir = base / "masks"
-        zip_file_path = zip_masks(masks_dir, data["session_id"] + "_masks")
-
-        # Send the zip file
-        return send_from_directory(
-            directory=str(base),
-            path=data["session_id"] + "_masks.zip",
-            as_attachment=True,
-        )
-    else:
-        # If not zipping, return a success message or a list of the created mask paths
-        return make_response("Masks created successfully, zipping skipped.", 200)
-
+@app.route("/zip", methods=["POST"])
+def zip_masks() -> Response:
+    """
+    Zip all files in a directory.
+    """
+    session_id = request.json["session_id"]
+    base = UPLOADS_PATH / session_id
+    directory = base / "masks"
+    zip_name =  (session_id + "_masks.zip")
+    with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file in directory.glob("*.jpg"):
+            zipf.write(file, str(file.relative_to(directory)))
+    # Send the zip file
+    return send_from_directory(
+        directory=str(base),
+        path=zip_name,
+        as_attachment=True,
+    )
 
 class MyGraphQLView(GraphQLView):
     def get_context(self, request: Request, response: Response) -> Any:

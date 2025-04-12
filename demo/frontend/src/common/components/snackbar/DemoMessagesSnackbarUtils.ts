@@ -35,6 +35,10 @@ export interface MessagesEventMap {
   trackAndPlayComplete: MessageEvent;
   trackAndPlayThrottlingWarning: MessageEvent;
   effectsMessage: MessageEvent;
+  maskGenerationStart: MessageEvent;
+  maskGenerationSuccess: MessageEvent;
+  maskGenerationFailure: MessageEvent;
+  noActiveSession: MessageEvent;
 }
 
 export const defaultMessageMap: MessagesEventMap = {
@@ -77,5 +81,25 @@ export const defaultMessageMap: MessagesEventMap = {
     text: 'Tip: If you aren’t sure where to get started, click “Surprise Me” to apply a surprise effect to your video.',
     shown: false,
     options: {expire: false, repeat: false},
+  },
+  maskGenerationStart: {
+    text: '⏳ Generating masks on the server. Please keep this window open...',
+    shown: false,
+    options: {expire: false, showClose: false, type: 'info', duration: 0, repeat: true},
+  },
+  maskGenerationSuccess: {
+    text: '✅ Masks generated successfully!',
+    shown: false,
+    options: {type: 'info', expire: true, duration: 5000, repeat: true},
+  },
+  maskGenerationFailure: {
+    text: '❌ Failed to generate masks. Please try again.',
+    shown: false,
+    options: {type: 'warning', expire: true, duration: 7000, repeat: true},
+  },
+  noActiveSession: {
+    text: '❌ No active session found. Please try again.',
+    shown: false,
+    options: {type: 'warning', expire: true, duration: 5000, repeat: true},
   },
 };

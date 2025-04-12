@@ -141,13 +141,13 @@ export default function useDownloadVideo(): State {
     );
 
     try {
-      // Call the /maskify endpoint using the constant
-      const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, { // Use the imported constant
+      // Call the /zip endpoint using the constant
+      const response = await fetch(`${VIDEO_API_ENDPOINT}/zip`, { // Use the imported constant
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ session_id: sessionId, zip: true }),
+        body: JSON.stringify({ session_id: sessionId }),
       });
 
       setProgress(70); // Progress after fetch call initiated

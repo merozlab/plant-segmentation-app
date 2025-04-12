@@ -16,14 +16,20 @@
 import {Archive} from '@carbon/icons-react';
 import OptionButton from './OptionButton';
 import useDownloadVideo from './useDownloadVideo';
+import { useAtomValue } from 'jotai';
+import { masksReadyAtom } from './masksReadyAtom';
+import Tooltip from '@/common/components/Tooltip';
 
 export default function DownloadFramesOption() {
   const {download, state} = useDownloadVideo();
+  const masksReady = useAtomValue(masksReadyAtom); // Get the mask readiness state
 
-  return (
+  // Conditionally render with tooltip if masks aren't ready
+  const buttonElement = (
     <OptionButton
-      title="Download Frames"
+      title="Download Masks"
       Icon={Archive}
+      isDisabled={!masksReady}
       loadingProps={{
         loading: state === 'started' || state === 'encoding',
         label: 'Extracting frames...',
@@ -31,4 +37,16 @@ export default function DownloadFramesOption() {
       onClick={() => download(true, 'frames')}
     />
   );
+
+  // If masks aren't ready, wrap in a tooltip explaining why it's disabled
+  if (!masksReady) {
+    return (
+      <Tooltip message="Click 'Next' to generate masks first">
+        {buttonElement}
+      </Tooltip>
+    );
+  }
+
+  // Otherwise just return the button
+  return buttonElement;
 }
