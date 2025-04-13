@@ -16,6 +16,7 @@
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import ToolbarBottomActionsWrapper from '@/common/components/toolbar/ToolbarBottomActionsWrapper';
+import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import {
   MORE_OPTIONS_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
@@ -25,6 +26,7 @@ import { useAtomValue, useAtom } from 'jotai';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import { ChevronRight } from '@carbon/icons-react';
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom';
+import { useState } from 'react';
 
 
 type Props = {
@@ -34,16 +36,20 @@ type Props = {
 export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom); // Get the current session
   const [, setMasksReady] = useAtom(masksReadyAtom); // We only need the setter here
+  const [, setIsLoading] = useState(false); // Add loading state
+  const { enqueueMessage, clearMessage } = useMessagesSnackbar();
 
   async function handleSwitchToMoreOptionsTab() {
     if (!session?.id) {
-      // Decide if navigation should still happen or show an error
-      // For now, let's navigate anyway but log the error
-      console.log('Session ID is not available');
-      onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
+      // Use the predefined message for no active session
+      enqueueMessage('noActiveSession');
       return;
     }
 
+    setIsLoading(true);
+    // Show mask generation in-progress message
+    enqueueMessage('maskGenerationStart');
+    
     try {
       // Call the /maskify endpoint asynchronously
       const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, {
@@ -54,19 +60,29 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
         // Send zip: false as we only need the server to generate masks, not zip them for download yet
         body: JSON.stringify({ session_id: session.id, zip: false }),
       });
+      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Maskify request failed: ${response.status} - ${errorText}`);
       }
       else {
+        // Clear the in-progress message
+        clearMessage();
+        // Show success message
+        enqueueMessage('maskGenerationSuccess');
+        // Set masks as ready
         setMasksReady(true);
+        // Navigate to More Options tab
+        onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
       }
     } catch (error) {
-      console.log('Error calling /maskify endpoint:', error);
-      // Handle error appropriately - maybe show a message to the user
-      // For now, just log the error and continue navigation
-    } 
-    onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
+      // Clear the in-progress message
+      clearMessage();
+      // Show error message
+      enqueueMessage('maskGenerationFailure');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
