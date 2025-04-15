@@ -4,8 +4,14 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-from typing import Any, Generator
+from typing import Any, Generator, Tuple
 import json
+from mask_to_curvature import (
+    centerlines_to_df,
+    find_closest_point,
+    get_centerline,
+    get_contours,
+)
 import numpy as np
 import cv2
 from pycocotools import mask as mask_util
@@ -150,9 +156,9 @@ def maskify() -> Response:
         # Create a blank image (black background)
         image = np.zeros((height, width, 3), dtype=np.uint8)
 
-        # Define colors for different objects
+        # Define colors for different objects - FIXME: this should be BGR
         colors = [
-            (255, 0, 0),  # Red
+            (255, 225, 225),  # White
             (0, 255, 0),  # Green
             (0, 0, 255),  # Blue
             (255, 255, 0),  # Yellow
@@ -195,7 +201,7 @@ def zip_masks() -> Response:
     session_id = request.json["session_id"]
     base = UPLOADS_PATH / session_id
     directory = base / "masks"
-    zip_name =  (session_id + "_masks.zip")
+    zip_name = session_id + "_masks.zip"
     with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
         for file in directory.glob("*.jpg"):
             zipf.write(file, str(file.relative_to(directory)))
@@ -205,6 +211,34 @@ def zip_masks() -> Response:
         path=zip_name,
         as_attachment=True,
     )
+
+
+@app.route("/centerline", methods=["POST"])
+def centerline() -> Response:
+    data = request.json
+    session_id = data["session_id"]
+    base = UPLOADS_PATH / session_id
+    masks_dir = base / "masks"
+    # Load the JSON file with mask data
+    if not base.exists():
+        return make_response("Session not found", 404)
+    elif not masks_dir.exists():
+        return make_response("Masks not found", 404)
+    base_coords: Tuple[int, int] = data["base_coords"][0]
+    centerlines = []
+    for frame in sorted(masks_dir.glob("*.jpg")):
+        contour = get_contours(frame)
+        start_index = find_closest_point(contour, base_coords)
+        centerline = get_centerline(contour, start_index, display=False)
+        centerlines.append(centerline)
+    centerlines_df = centerlines_to_df(centerlines)
+    centerlines_df.to_csv(filename:=session_id + "_centerlines.csv", index=False)
+    return send_from_directory(
+        directory=str(base),
+        path=filename,
+        as_attachment=True,
+    )
+
 
 class MyGraphQLView(GraphQLView):
     def get_context(self, request: Request, response: Response) -> Any:

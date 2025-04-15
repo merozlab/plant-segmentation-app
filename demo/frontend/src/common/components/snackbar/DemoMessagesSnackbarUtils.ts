@@ -39,6 +39,12 @@ export interface MessagesEventMap {
   maskGenerationSuccess: MessageEvent;
   maskGenerationFailure: MessageEvent;
   noActiveSession: MessageEvent;
+  centerlineSuccess: MessageEvent;
+  centerlineError: MessageEvent;
+  centerlineInstructions: MessageEvent;
+  basePointSet: MessageEvent;
+  selectNextBasePoint: MessageEvent;
+  allBasePointsSet: MessageEvent;
 }
 
 export const defaultMessageMap: MessagesEventMap = {
@@ -102,4 +108,35 @@ export const defaultMessageMap: MessagesEventMap = {
     shown: false,
     options: {type: 'warning', expire: true, duration: 5000, repeat: true},
   },
+  centerlineSuccess: {
+    text: '✅ Centerlines generated successfully!',
+    shown: false,
+    options: {type: 'info', expire: true, duration: 5000, repeat: true},
+  },
+  centerlineError: {
+    text: '❌ Failed to generate centerlines. Please try again.',
+    shown: false,
+    options: {type: 'warning', expire: true, duration: 7000, repeat: true},
+  },
+  centerlineInstructions: {
+    text: 'Select base points for each plant object by clicking on the video frame. We recommend selecting the base (bottom) of the plant stem.',
+    shown: false,
+    options: {type: 'info', expire: true, duration: 5000, repeat: true},
+  },
+  basePointSet: {
+    text: '✅ Base point set successfully!',
+    shown: false,
+    options: {type: 'info', expire: true, duration: 3000, repeat: true},
+  },
+  selectNextBasePoint: {
+    text: 'Now select a base point for the next object.',
+    shown: false,
+    options: {type: 'info', expire: true, duration: 4000, repeat: true},
+  },
+  allBasePointsSet: {
+    text: '✅ All base points are set! You can now extract centerlines.',
+    shown: false,
+    options: {type: 'info', expire: true, duration: 5000, repeat: true},
+  },
+
 };

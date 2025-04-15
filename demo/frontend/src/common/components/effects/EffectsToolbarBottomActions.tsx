@@ -93,7 +93,7 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
       <PrimaryCTAButton
         onClick={handleSwitchToMoreOptionsTab}
         endIcon={<ChevronRight />}>
-        Next
+        {false ? 'Generating...' : 'Next'}
       </PrimaryCTAButton>
     </ToolbarBottomActionsWrapper>
   );
