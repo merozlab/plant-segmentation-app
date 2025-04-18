@@ -17,7 +17,7 @@ import TrackletsAnnotation from '@/common/components/annotations/TrackletsAnnota
 import useCloseSessionBeforeUnload from '@/common/components/session/useCloseSessionBeforeUnload';
 import MessagesSnackbar from '@/common/components/snackbar/MessagesSnackbar';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
-import {OBJECT_TOOLBAR_INDEX} from '@/common/components/toolbar/ToolbarConfig';
+import { CENTERLINE_TOOLBAR_INDEX, OBJECT_TOOLBAR_INDEX } from '@/common/components/toolbar/ToolbarConfig';
 import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
 import VideoFilmstripWithPlayback from '@/common/components/video/VideoFilmstripWithPlayback';
 import {
@@ -30,11 +30,11 @@ import VideoEditor from '@/common/components/video/editor/VideoEditor';
 import useResetDemoEditor from '@/common/components/video/editor/useResetEditor';
 import useVideo from '@/common/components/video/editor/useVideo';
 import InteractionLayer from '@/common/components/video/layers/InteractionLayer';
-import {PointsLayer} from '@/common/components/video/layers/PointsLayer';
+import { PointsLayer } from '@/common/components/video/layers/PointsLayer';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
 import useScreenSize from '@/common/screen/useScreenSize';
-import {SegmentationPoint} from '@/common/tracker/Tracker';
+import { SegmentationPoint } from '@/common/tracker/Tracker';
 import {
   activeTrackletObjectIdAtom,
   frameIndexAtom,
@@ -42,6 +42,7 @@ import {
   isPlayingAtom,
   isVideoLoadingAtom,
   pointsAtom,
+  basePointAtom,
   sessionAtom,
   streamingStateAtom,
   trackletObjectsAtom,
@@ -49,11 +50,13 @@ import {
   VideoData,
 } from '@/demo/atoms';
 import useSettingsContext from '@/settings/useSettingsContext';
-import {color, spacing} from '@/theme/tokens.stylex';
+import { color, spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
-import {useAtom, useAtomValue, useSetAtom} from 'jotai';
-import {useEffect, useState} from 'react';
-import type {ErrorObject} from 'serialize-error';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useState } from 'react';
+import type { ErrorObject } from 'serialize-error';
+
+
 
 const styles = stylex.create({
   container: {
@@ -92,8 +95,8 @@ type Props = {
   video: VideoData;
 };
 
-export default function DemoVideoEditor({video: inputVideo}: Props) {
-  const {settings} = useSettingsContext();
+export default function DemoVideoEditor({ video: inputVideo }: Props) {
+  const { settings } = useSettingsContext();
   const video = useVideo();
 
   const [isSessionStartFailed, setIsSessionStartFailed] =
@@ -104,9 +107,10 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
   const [activeTrackletId, setActiveTrackletObjectId] = useAtom(
     activeTrackletObjectIdAtom,
   );
-  const setTrackletObjects = useSetAtom(trackletObjectsAtom);
+  const [trackletObjects, setTrackletObjects] = useAtom(trackletObjectsAtom);
   const setFrameIndex = useSetAtom(frameIndexAtom);
   const points = useAtomValue(pointsAtom);
+  const basePoint = useAtomValue(basePointAtom);
   const isAddObjectEnabled = useAtomValue(isAddObjectEnabledAtom);
   const streamingState = useAtomValue(streamingStateAtom);
   const isPlaying = useAtomValue(isPlayingAtom);
@@ -117,14 +121,14 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     null,
   );
 
-  const {isMobile} = useScreenSize();
+  const { isMobile } = useScreenSize();
 
   const [tabIndex] = useToolbarTabs();
-  const {enqueueMessage} = useMessagesSnackbar();
+  const { enqueueMessage } = useMessagesSnackbar();
 
   useCloseSessionBeforeUnload();
 
-  const {resetEditor, resetSession} = useResetDemoEditor();
+  const { resetEditor, resetSession } = useResetDemoEditor();
   useEffect(() => {
     resetEditor();
   }, [inputVideo, resetEditor]);
@@ -139,7 +143,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     video?.addEventListener('frameUpdate', onFrameUpdate);
 
     function onSessionStarted(event: SessionStartedEvent) {
-      setSession({id: event.sessionId, ranPropagation: false});
+      setSession({ id: event.sessionId, ranPropagation: false });
     }
 
     video?.addEventListener('sessionStarted', onSessionStarted);
@@ -225,6 +229,57 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     handleOptimisticPointUpdate([...points, point]);
   }
 
+
+
+  async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint | null) {
+    if (session == null) {
+      return;
+    }
+    function setBasePointForActiveTracklet(basePoint: SegmentationPoint | null) {
+      if (activeTrackletId === null) {
+        return;
+      }
+
+      // Create a copy with the updated basePoint for the active tracklet
+      const updatedTracklets = trackletObjects.map(tracklet => {
+        if (tracklet.id === activeTrackletId) {
+          return {
+            ...tracklet,
+            basePoint: basePoint
+          };
+        }
+        return tracklet;
+      });
+      setTrackletObjects(updatedTracklets);
+    }
+    if (activeTrackletId != null) {
+      setBasePointForActiveTracklet(newPoint);
+      console.log('Setting base point', newPoint);
+      const currentIndex = trackletObjects.findIndex(t => t.id === activeTrackletId);
+      const nextIndex = (currentIndex + 1) % trackletObjects.length;
+      console.log('Next index:', nextIndex);
+      if (currentIndex < trackletObjects.length - 1) {
+        setActiveTrackletObjectId(trackletObjects[nextIndex].id);
+        console.log('set next tracklet id:', trackletObjects[nextIndex].id);
+      } 
+    } else {
+      console.log('Missing tracklet');
+    }
+    enqueueMessage('pointClick');
+  }
+
+  async function handleAddBasePoint(point: SegmentationPoint) {
+    if (streamingState === 'partial' || streamingState === 'requesting') {
+      return;
+    }
+    if (isPlaying) {
+      return video?.pause();
+    }
+
+    handleOptimisticBasePointUpdate(point);
+  }
+
+
   function handleRemovePoint(point: SegmentationPoint) {
     if (
       isPlaying ||
@@ -236,6 +291,19 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     handleOptimisticPointUpdate(points.filter(p => p !== point));
   }
 
+
+  function handleRemoveBasePoint(point: SegmentationPoint) {
+    if (
+      isPlaying ||
+      streamingState === 'partial' ||
+      streamingState === 'requesting'
+    ) {
+      return;
+    }
+    console.log('Removing base point', point);
+    handleOptimisticBasePointUpdate(null);
+    return;
+  }
   // The interaction layer handles clicks onto the video canvas. It is used
   // to get absolute point clicks within the video's coordinate system.
   // The PointsLayer handles rendering of input points and allows removing
@@ -255,6 +323,21 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
           />
         </>
       )}
+      {tabIndex === CENTERLINE_TOOLBAR_INDEX && (
+        <>
+          <InteractionLayer
+            key="basepoint-interaction-layer"
+            onPoint={point => handleAddBasePoint(point)}
+          />
+          {basePoint && (
+            <PointsLayer
+              key="base-points-layer"
+              points={[basePoint]}
+              onRemovePoint={handleRemoveBasePoint}
+            />
+          )}
+        </>
+      )}
       {!isMobile && <MessagesSnackbar key="snackbar-layer" />}
     </>
   );
@@ -264,7 +347,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
       {(isVideoLoading || session === null) && !isSessionStartFailed && (
         <div {...stylex.props(styles.loadingScreenWrapper)}>
           <LoadingStateScreen
-            title="Loading demo..."
+            title="Loading tracker..."
             description="This may take a few moments, you're almost there!"
           />
         </div>
@@ -276,7 +359,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
             description={
               <>Uh oh, it looks like there was an issue starting a session.</>
             }
-            linkProps={{to: '..', label: 'Back to homepage'}}
+            linkProps={{ to: '..', label: 'Back to homepage' }}
           />
         </div>
       )}
@@ -285,7 +368,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
           <LoadingStateScreen
             title="Well, this is embarrassing..."
             description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
-            linkProps={{to: '..', label: 'Back to homepage'}}
+            linkProps={{ to: '..', label: 'Back to homepage' }}
           />
         </div>
       )}

@@ -45,6 +45,7 @@ export interface MessagesEventMap {
   basePointSet: MessageEvent;
   selectNextBasePoint: MessageEvent;
   allBasePointsSet: MessageEvent;
+  basepointsError: MessageEvent;
 }
 
 export const defaultMessageMap: MessagesEventMap = {
@@ -138,5 +139,9 @@ export const defaultMessageMap: MessagesEventMap = {
     shown: false,
     options: {type: 'info', expire: true, duration: 5000, repeat: true},
   },
-
+  basepointsError: {
+    text: '❌ Failed to set base point. Please try again.',
+    shown: false,
+    options: {type: 'warning', expire: true, duration: 7000, repeat: true},
+  }
 };

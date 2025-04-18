@@ -223,6 +223,7 @@ export class SAM2Model extends Tracker {
       color: THEME_COLORS[nextId % THEME_COLORS.length],
       thumbnail: null,
       points: [],
+      basePoint: null,
       masks: [],
       isInitialized: false,
     };
@@ -647,6 +648,7 @@ export class SAM2Model extends Tracker {
         color,
         isInitialized,
         points: trackletPoints,
+        basePoint,
         thumbnail,
         masks,
       } = tracklet;
@@ -655,6 +657,7 @@ export class SAM2Model extends Tracker {
         color,
         isInitialized,
         points: trackletPoints,
+        basePoint,
         thumbnail,
         masks: masks.map(mask => ({
           shape: mask.shape,

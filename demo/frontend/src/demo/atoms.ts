@@ -80,6 +80,7 @@ export type TrackletObject = {
   color: string;
   thumbnail: string | null;
   points: SegmentationPoint[][];
+  basePoint: SegmentationPoint[] | null;
   masks: TrackletMask[];
   isInitialized: boolean;
 };
@@ -118,6 +119,11 @@ export const pointsAtom = atom<SegmentationPoint[]>(get => {
   const frameIndex = get(frameIndexAtom);
   const activeTracklet = get(activeTrackletObjectAtom);
   return activeTracklet?.points[frameIndex] ?? [];
+});
+
+export const basePointAtom = atom<SegmentationPoint | null>(get => {
+  const activeTracklet = get(activeTrackletObjectAtom);
+  return activeTracklet?.basePoint ?? null;
 });
 
 export const labelTypeAtom = atom<'positive' | 'negative'>('positive');

@@ -41,9 +41,8 @@ export default function MoreOptionsToolbar({onTabChange}: Props) {
     <div className="flex flex-col h-full">
       <div className="grow">
         <ToolbarHeaderWrapper
-          title="Nice work! What's next?"
+          title="Download Masks"
           className="pb-0 !border-b-0 !text-white"
-          showProgressChip={false}
         />
         <ShareSection />
         {/* {!isMobile && <div className="h-[1px] bg-black mt-4 mb-8"></div>} */}

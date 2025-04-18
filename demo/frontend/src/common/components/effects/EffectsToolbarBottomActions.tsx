@@ -36,8 +36,8 @@ type Props = {
 export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom); // Get the current session
   const [, setMasksReady] = useAtom(masksReadyAtom); // We only need the setter here
-  const [, setIsLoading] = useState(false); // Add loading state
   const { enqueueMessage, clearMessage } = useMessagesSnackbar();
+  const [isLoading, setIsLoading] = useState(false);
 
   async function handleSwitchToMoreOptionsTab() {
     if (!session?.id) {
@@ -46,9 +46,9 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
       return;
     }
 
-    setIsLoading(true);
+    setIsLoading(true); // Set loading state to true
     // Show mask generation in-progress message
-    enqueueMessage('maskGenerationStart');
+    // enqueueMessage('maskGenerationStart');
     
     try {
       // Call the /maskify endpoint asynchronously
@@ -66,10 +66,10 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
         throw new Error(`Maskify request failed: ${response.status} - ${errorText}`);
       }
       else {
+        setIsLoading(false); // Set loading state to false
         // Clear the in-progress message
         clearMessage();
         // Show success message
-        enqueueMessage('maskGenerationSuccess');
         // Set masks as ready
         setMasksReady(true);
         // Navigate to More Options tab
@@ -92,8 +92,9 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
       />
       <PrimaryCTAButton
         onClick={handleSwitchToMoreOptionsTab}
-        endIcon={<ChevronRight />}>
-        {false ? 'Generating...' : 'Next'}
+        endIcon={<ChevronRight />}
+        disabled={isLoading}>
+        {isLoading ? 'Generating...' : 'Next'}
       </PrimaryCTAButton>
     </ToolbarBottomActionsWrapper>
   );

@@ -15,59 +15,35 @@
  */
 import ToolbarObjectContainer from '@/common/components/annotations/ToolbarObjectContainer';
 import ObjectThumbnail from '@/common/components/annotations/ObjectThumbnail';
-import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
+// import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import { Button } from 'react-daisyui';
 import { ChevronLeft, Download } from '@carbon/icons-react';
 import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import {
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { trackletObjectsAtom, sessionAtom, frameIndexAtom } from '@/demo/atoms';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useState, useEffect } from 'react';
-import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+import { trackletObjectsAtom, activeTrackletObjectIdAtom, sessionAtom, frameIndexAtom } from '@/demo/atoms';
+import { useAtomValue, useSetAtom, useAtom } from 'jotai';
+import {  useEffect } from 'react';
+// import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import useVideo from '@/common/components/video/editor/useVideo';
+import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-// Interface for tracking base points
-interface ObjectBasePoint {
-  objectId: number;
-  basePoint: [number, number] | null;
-  name: string;
-}
 
 export default function CenterlineToolbar({ onTabChange }: Props) {
-  const trackletObjects = useAtomValue(trackletObjectsAtom);
   const session = useAtomValue(sessionAtom);
+  console.log(session?.id)
   const video = useVideo();
-  const { enqueueMessage } = useMessagesSnackbar();
+  // const { enqueueMessage } = useMessagesSnackbar();
   const setFrameIndex = useSetAtom(frameIndexAtom);
-
-  // State for tracking base points for each object
-  const [objectBasePoints, setObjectBasePoints] = useState<ObjectBasePoint[]>([]);
-  // State to track if the "Get Centerlines" button should be enabled
-  const [allPointsSelected, setAllPointsSelected] = useState(false);
-  // Loading state for the button
-  const [isLoading, setIsLoading] = useState(false);
-  // Currently active object for base point selection
-  const [activeObjectIndex, setActiveObjectIndex] = useState<number>(0);
-  // State to control whether to show the interaction layer
-  // const [showInteractionLayer, setShowInteractionLayer] = useState(true);
-
-  // Initialize object base points when tracklet objects change
-  useEffect(() => {
-    if (trackletObjects.length > 0) {
-      const initialBasePoints = trackletObjects.map(obj => ({
-        objectId: obj.id,
-        basePoint: null,
-        name: `Object ${obj.id + 1}`
-      }));
-      setObjectBasePoints(initialBasePoints);
-    }
-  }, [trackletObjects]);
+  const [activeTrackletId, setActiveTrackletObjectId] = useAtom(
+    activeTrackletObjectIdAtom,
+  );
+  const [trackletObjects] = useAtom(trackletObjectsAtom);
 
   // Reset video to first frame and pause when this component mounts
   useEffect(() => {
@@ -80,98 +56,46 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     return () => {
     };
   }, [video, setFrameIndex]);
-
-  // Check if all objects have base points set
+  // Set active tracklet id to 0 on mount
   useEffect(() => {
-    const allSelected = objectBasePoints.length > 0 &&
-      objectBasePoints.every(point => point.basePoint !== null);
-    setAllPointsSelected(allSelected);
-  }, [objectBasePoints]);
-
+    setActiveTrackletObjectId(0);
+  }, []);
   const handleBack = () => {
     onTabChange(2); // Go back to More Options tab (index 2)
   };
 
-  // Handle clicking on a specific object to make it active
-  const handleObjectClick = (objectId: number) => {
-    const objectIndex = objectBasePoints.findIndex(obj => obj.objectId === objectId);
-    if (objectIndex !== -1) {
-      setActiveObjectIndex(objectIndex);
-    }
-  };
-
-  const handleGetCenterlines = async () => {
-    if (!session?.id) {
-      enqueueMessage('noActiveSession');
+  const allPointsSelected = trackletObjects.every(obj => obj.basePoint);
+  const isLoading = false; // Replace with actual loading state
+  function handleGetCenterlines() {
+    if (session) {
+      console.error('Session ID in handlegetcenterlines:', session.id);
       return;
+    } else {
+      console.error('Session ID is null in handlegetcenterlines');
     }
-
-    try {
-      setIsLoading(true);
-
-      // Prepare data for the API call
-      const baseCoords = objectBasePoints
-        .filter(point => point.basePoint !== null)
-        .map(point => point.basePoint);
-
-      // Send request to the backend
-      const response = await fetch(`${VIDEO_API_ENDPOINT}/centerline`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_id: session.id,
-          base_coords: baseCoords
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      // Handle the successful response - it will be a CSV file download
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      document.body.appendChild(a);
-      a.href = url;
-      a.download = `${session.id}_centerlines.csv`;
-      a.click();
-
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      enqueueMessage('centerlineSuccess');
-    } catch (error) {
-      console.error('Error fetching centerlines:', error);
-      enqueueMessage('centerlineError');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }
 
   return (
     <div className="flex flex-col h-full">
       {/* Add the interaction layer to capture point clicks */}
 
-      <p className="text-gray-400 mb-4">
-        Select base points for each object to calculate centerlines.
-        Click on the video canvas to set the base point for each plant.
-      </p>
+    <ToolbarHeaderWrapper
+      title="Centerline Extraction"
+      description="Set base points for each object to extract centerlines."
+      className="pb-4"
+    />
 
       <div className="grow w-full overflow-y-auto">
-        {objectBasePoints.map((obj, index) => {
-          const tracklet = trackletObjects.find(t => t.id === obj.objectId);
+        {trackletObjects.map((obj, index) => {
+          const tracklet = trackletObjects.find(t => t.id === obj.id);
           const color = tracklet?.color || '#ffffff';
-          const isActive = index === activeObjectIndex;
+          const isActive = index === activeTrackletId;
 
           return (
             <ToolbarObjectContainer
-              key={obj.objectId}
+              key={obj.id}
               isActive={isActive}
-              title={obj.name}
+              title={`Object ${index + 1}`}
               subtitle={obj.basePoint
                 ? `Base point set at (${Math.round(obj.basePoint[0])}, ${Math.round(obj.basePoint[1])})`
                 : isActive
@@ -179,7 +103,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                   : 'Waiting for base point selection'
               }
               isMobile={false}
-              onClick={() => handleObjectClick(obj.objectId)}
+              onClick={() => setActiveTrackletObjectId(obj.id)}
               thumbnail={
                 <ObjectThumbnail
                   thumbnail={tracklet?.thumbnail || null}

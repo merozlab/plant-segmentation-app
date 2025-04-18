@@ -20,7 +20,7 @@ import {useAtomValue} from 'jotai';
 import {useMemo} from 'react';
 import {Loading} from 'react-daisyui';
 
-const TOTAL_DEMO_STEPS = 3;
+const TOTAL_DEMO_STEPS = 5;
 
 export default function ToolbarProgressChip() {
   const [toolbarIndex] = useToolbarTabs();
@@ -34,7 +34,9 @@ export default function ToolbarProgressChip() {
     if (toolbarIndex === OBJECT_TOOLBAR_INDEX) {
       return streamingState !== 'full' ? 1 : 2;
     }
-    return 3;
+    else {
+      return toolbarIndex + 2;
+    }
   }
 
   return (
