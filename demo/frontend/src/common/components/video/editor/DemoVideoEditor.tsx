@@ -31,6 +31,7 @@ import useResetDemoEditor from '@/common/components/video/editor/useResetEditor'
 import useVideo from '@/common/components/video/editor/useVideo';
 import InteractionLayer from '@/common/components/video/layers/InteractionLayer';
 import { PointsLayer } from '@/common/components/video/layers/PointsLayer';
+import { BasePointsLayer } from '@/common/components/video/layers/BasePointsLayer';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
 import useScreenSize from '@/common/screen/useScreenSize';
@@ -42,7 +43,7 @@ import {
   isPlayingAtom,
   isVideoLoadingAtom,
   pointsAtom,
-  basePointAtom,
+  basePointsAtom,
   sessionAtom,
   streamingStateAtom,
   trackletObjectsAtom,
@@ -110,7 +111,7 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   const [trackletObjects, setTrackletObjects] = useAtom(trackletObjectsAtom);
   const setFrameIndex = useSetAtom(frameIndexAtom);
   const points = useAtomValue(pointsAtom);
-  const basePoint = useAtomValue(basePointAtom);
+  const [basePoints, setBasePoints] = useAtom(basePointsAtom);
   const isAddObjectEnabled = useAtomValue(isAddObjectEnabledAtom);
   const streamingState = useAtomValue(streamingStateAtom);
   const isPlaying = useAtomValue(isPlayingAtom);
@@ -231,15 +232,15 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
 
 
 
-  async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint | null) {
+  async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint) {
     if (session == null) {
       return;
     }
-    function setBasePointForActiveTracklet(basePoint: SegmentationPoint | null) {
+
+    function setBasePointForActiveTracklet(basePoint: SegmentationPoint) {
       if (activeTrackletId === null) {
         return;
       }
-
       // Create a copy with the updated basePoint for the active tracklet
       const updatedTracklets = trackletObjects.map(tracklet => {
         if (tracklet.id === activeTrackletId) {
@@ -256,16 +257,34 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
       setBasePointForActiveTracklet(newPoint);
       console.log('Setting base point', newPoint);
       const currentIndex = trackletObjects.findIndex(t => t.id === activeTrackletId);
-      const nextIndex = (currentIndex + 1) % trackletObjects.length;
-      console.log('Next index:', nextIndex);
+
+      // Find all tracklets that do not have a basePoint set (excluding the current one)
+      const unselectedBasePointIndexes = trackletObjects
+        .map((t, idx) => ({ idx, hasBasePoint: !!t.basePoint }))
+        .filter(({ idx, hasBasePoint }) => !hasBasePoint && idx !== currentIndex)
+        .map(({ idx }) => idx);
+
+      let nextIndex: number | null = null;
+
       if (currentIndex < trackletObjects.length - 1) {
+        // Default: move to next index
+        nextIndex = currentIndex + 1;
+      } else if (unselectedBasePointIndexes.length > 0) {
+        // At last index: move to first index without a basePoint
+        nextIndex = unselectedBasePointIndexes[0];
+      }
+
+      if (
+        nextIndex !== null &&
+        nextIndex >= 0 &&
+        nextIndex < trackletObjects.length
+      ) {
         setActiveTrackletObjectId(trackletObjects[nextIndex].id);
         console.log('set next tracklet id:', trackletObjects[nextIndex].id);
-      } 
+      }
     } else {
       console.log('Missing tracklet');
     }
-    enqueueMessage('pointClick');
   }
 
   async function handleAddBasePoint(point: SegmentationPoint) {
@@ -275,7 +294,10 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     if (isPlaying) {
       return video?.pause();
     }
-
+    if (basePoints.length >= trackletObjects.length) {
+      return;
+    }
+    setBasePoints([...basePoints, point]);
     handleOptimisticBasePointUpdate(point);
   }
 
@@ -291,103 +313,128 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     handleOptimisticPointUpdate(points.filter(p => p !== point));
   }
 
-
-  function handleRemoveBasePoint(point: SegmentationPoint) {
-    if (
-      isPlaying ||
-      streamingState === 'partial' ||
-      streamingState === 'requesting'
-    ) {
+  async function handleOptimisticRemoveBasePointUpdate(point: SegmentationPoint) {
+    if (session == null) {
       return;
     }
-    console.log('Removing base point', point);
-    handleOptimisticBasePointUpdate(null);
-    return;
+    if (activeTrackletId != null) {
+      const trackletWithSameBasePoint = trackletObjects.find(
+        t => t.basePoint && t.basePoint[0] === point?.[0] && t.basePoint[1] === point?.[1]
+      );
+      if (trackletWithSameBasePoint) {
+        const updatedTracklets = trackletObjects.map(tracklet => {
+          if (
+            tracklet.id === trackletWithSameBasePoint.id
+          ) {
+            return {
+              ...tracklet,
+              basePoint: null,
+            };
+          }
+          return tracklet;
+        });
+        setTrackletObjects(updatedTracklets);
+      }
+      return;
+    }
   }
-  // The interaction layer handles clicks onto the video canvas. It is used
-  // to get absolute point clicks within the video's coordinate system.
-  // The PointsLayer handles rendering of input points and allows removing
-  // individual points by clicking on them.
-  const layers = (
-    <>
-      {tabIndex === OBJECT_TOOLBAR_INDEX && (
-        <>
-          <InteractionLayer
-            key="interaction-layer"
-            onPoint={point => handleAddPoint(point)}
-          />
-          <PointsLayer
-            key="points-layer"
-            points={points}
-            onRemovePoint={handleRemovePoint}
-          />
-        </>
-      )}
-      {tabIndex === CENTERLINE_TOOLBAR_INDEX && (
-        <>
-          <InteractionLayer
-            key="basepoint-interaction-layer"
-            onPoint={point => handleAddBasePoint(point)}
-          />
-          {basePoint && (
-            <PointsLayer
-              key="base-points-layer"
-              points={[basePoint]}
-              onRemovePoint={handleRemoveBasePoint}
-            />
-          )}
-        </>
-      )}
-      {!isMobile && <MessagesSnackbar key="snackbar-layer" />}
-    </>
-  );
 
-  return (
-    <>
-      {(isVideoLoading || session === null) && !isSessionStartFailed && (
-        <div {...stylex.props(styles.loadingScreenWrapper)}>
-          <LoadingStateScreen
-            title="Loading tracker..."
-            description="This may take a few moments, you're almost there!"
-          />
-        </div>
-      )}
-      {isSessionStartFailed && (
-        <div {...stylex.props(styles.loadingScreenWrapper)}>
-          <LoadingStateScreen
-            title="Did we just break the internet?"
-            description={
-              <>Uh oh, it looks like there was an issue starting a session.</>
-            }
-            linkProps={{ to: '..', label: 'Back to homepage' }}
-          />
-        </div>
-      )}
-      {isMobile && renderingError != null && (
-        <div {...stylex.props(styles.loadingScreenWrapper)}>
-          <LoadingStateScreen
-            title="Well, this is embarrassing..."
-            description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
-            linkProps={{ to: '..', label: 'Back to homepage' }}
-          />
-        </div>
-      )}
-      {uploadingState !== 'default' && (
-        <div {...stylex.props(styles.loadingScreenWrapper)}>
-          <UploadLoadingScreen />
-        </div>
-      )}
-      <div {...stylex.props(styles.container)}>
-        <VideoEditor
-          video={inputVideo}
-          layers={layers}
-          loading={session == null}>
-          <div className="bg-graydark-800 w-full">
-            <VideoFilmstripWithPlayback />
-            <TrackletsAnnotation />
+    function handleRemoveBasePoint(point: SegmentationPoint) {
+      if (
+        isPlaying ||
+        streamingState === 'partial' ||
+        streamingState === 'requesting'
+      ) {
+        return;
+      }
+      console.log('Removing base point', point);
+      setBasePoints(basePoints.filter(p => p !== point));
+      handleOptimisticRemoveBasePointUpdate(point);
+    }
+    // The interaction layer handles clicks onto the video canvas. It is used
+    // to get absolute point clicks within the video's coordinate system.
+    // The PointsLayer handles rendering of input points and allows removing
+    // individual points by clicking on them.
+    const layers = (
+      <>
+        {tabIndex === OBJECT_TOOLBAR_INDEX && (
+          <>
+            <InteractionLayer
+              key="interaction-layer"
+              onPoint={point => handleAddPoint(point)}
+            />
+            <PointsLayer
+              key="points-layer"
+              points={points}
+              onRemovePoint={handleRemovePoint}
+            />
+          </>
+        )}
+        {tabIndex === CENTERLINE_TOOLBAR_INDEX && (
+          <>
+            <InteractionLayer
+              key="basepoint-interaction-layer"
+              onPoint={point => handleAddBasePoint(point)}
+            />
+            {basePoints && (
+              <BasePointsLayer
+                key="base-points-layer"
+                points={basePoints}
+                onRemovePoint={handleRemoveBasePoint}
+              />
+            )}
+          </>
+        )}
+        {!isMobile && <MessagesSnackbar key="snackbar-layer" />}
+      </>
+    );
+
+    return (
+      <>
+        {(isVideoLoading || session === null) && !isSessionStartFailed && (
+          <div {...stylex.props(styles.loadingScreenWrapper)}>
+            <LoadingStateScreen
+              title="Loading tracker..."
+              description="This may take a few moments, you're almost there!"
+            />
           </div>
-        </VideoEditor>
-      </div>
-    </>
-  );
-}
+        )}
+        {isSessionStartFailed && (
+          <div {...stylex.props(styles.loadingScreenWrapper)}>
+            <LoadingStateScreen
+              title="Did we just break the internet?"
+              description={
+                <>Uh oh, it looks like there was an issue starting a session.</>
+              }
+              linkProps={{ to: '..', label: 'Back to homepage' }}
+            />
+          </div>
+        )}
+        {isMobile && renderingError != null && (
+          <div {...stylex.props(styles.loadingScreenWrapper)}>
+            <LoadingStateScreen
+              title="Well, this is embarrassing..."
+              description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
+              linkProps={{ to: '..', label: 'Back to homepage' }}
+            />
+          </div>
+        )}
+        {uploadingState !== 'default' && (
+          <div {...stylex.props(styles.loadingScreenWrapper)}>
+            <UploadLoadingScreen />
+          </div>
+        )}
+        <div {...stylex.props(styles.container)}>
+          <VideoEditor
+            video={inputVideo}
+            layers={layers}
+            loading={session == null}>
+            <div className="bg-graydark-800 w-full">
+              <VideoFilmstripWithPlayback />
+              <TrackletsAnnotation />
+            </div>
+          </VideoEditor>
+        </div>
+      </>
+    );
+  }

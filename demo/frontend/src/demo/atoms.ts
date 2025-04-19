@@ -121,10 +121,7 @@ export const pointsAtom = atom<SegmentationPoint[]>(get => {
   return activeTracklet?.points[frameIndex] ?? [];
 });
 
-export const basePointAtom = atom<SegmentationPoint | null>(get => {
-  const activeTracklet = get(activeTrackletObjectAtom);
-  return activeTracklet?.basePoint ?? null;
-});
+export const basePointsAtom = atom<SegmentationPoint[]>([]);
 
 export const labelTypeAtom = atom<'positive' | 'negative'>('positive');
 

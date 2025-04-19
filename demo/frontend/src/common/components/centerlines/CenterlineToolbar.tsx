@@ -24,10 +24,12 @@ import {
 } from '@/common/components/toolbar/ToolbarConfig';
 import { trackletObjectsAtom, activeTrackletObjectIdAtom, sessionAtom, frameIndexAtom } from '@/demo/atoms';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
-import {  useEffect } from 'react';
+import { useEffect } from 'react';
 // import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+import OptionButton from '@/common/components/options/OptionButton';
 
 type Props = {
   onTabChange: (newIndex: number) => void;
@@ -66,12 +68,40 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
 
   const allPointsSelected = trackletObjects.every(obj => obj.basePoint);
   const isLoading = false; // Replace with actual loading state
-  function handleGetCenterlines() {
+  async function handleGetCenterlines() {
     if (session) {
-      console.error('Session ID in handlegetcenterlines:', session.id);
-      return;
+      try {
+        const response = await fetch(`${VIDEO_API_ENDPOINT}/centerlines`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: session.id,
+            base_coords: trackletObjects
+              .sort((a, b) => a.id - b.id)
+              .map(obj => obj.basePoint?.slice(0, 2)),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get centerlines');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${session.id}_centerlines.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error fetching centerlines:', error);
+      }
     } else {
-      console.error('Session ID is null in handlegetcenterlines');
+      console.error('Session ID is null in handleGetCenterlines');
     }
   }
 
@@ -79,13 +109,13 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     <div className="flex flex-col h-full">
       {/* Add the interaction layer to capture point clicks */}
 
-    <ToolbarHeaderWrapper
-      title="Centerline Extraction"
-      description="Set base points for each object to extract centerlines."
-      className="pb-4"
-    />
+      <ToolbarHeaderWrapper
+        title="Centerline Extraction"
+        description="Set base points for each object to extract centerlines."
+        className="pb-4"
+      />
 
-      <div className="grow w-full overflow-y-auto">
+      <div className="grow p-5 false overflow-y-auto">
         {trackletObjects.map((obj, index) => {
           const tracklet = trackletObjects.find(t => t.id === obj.id);
           const color = tracklet?.color || '#ffffff';
@@ -116,8 +146,8 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                   {obj.basePoint
                     ? '✓ Base point set'
                     : isActive
-                      ? '👉 Currently selecting'
-                      : '⚠️ Waiting for selection'
+                      ? 'Currently selecting'
+                      : 'Waiting for selection'
                   }
                 </div>
               </div>
@@ -126,16 +156,17 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         })}
       </div>
 
-      <div className="mt-6 text-center">
-        <Button
-          color="primary"
-          disabled={!allPointsSelected || isLoading}
-          loading={isLoading}
+      <div className="p-5 md:p-8 flex flex-col gap-4">
+        <OptionButton
+          title="Get Centerlines"
+          Icon={Download}
+          isDisabled={!allPointsSelected || isLoading}
+          loadingProps={{
+            loading: isLoading,
+            label: 'Processing...',
+          }}
           onClick={handleGetCenterlines}
-          startIcon={<Download />}
-          className="w-full">
-          {isLoading ? 'Processing...' : 'Get Centerlines'}
-        </Button>
+        />
         <p className="text-sm text-gray-500 mt-2">
           {allPointsSelected ?
             'Ready to extract centerlines!' :

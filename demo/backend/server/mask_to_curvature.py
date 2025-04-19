@@ -4,9 +4,11 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from numpy.typing import ArrayLike
 import streamlit as st
+import zipfile
+from io import BytesIO
 
 
 def get_contours(path) -> np.ndarray:
@@ -141,8 +143,21 @@ def get_tip_angles(centerlines, display=False):
     return angles
 
 
-def centerlines_to_df(centerlines):
-    l = []
-    for i, t in enumerate(centerlines):
-        l.append(pd.DataFrame({"frame": i, "x": t[0], "y": t[1]}))
-    return pd.concat(l).reset_index(drop=True)
+def centerlines_to_df(
+    centerlines: Dict[str, List[ArrayLike]],
+) -> Dict[str, pd.DataFrame]:
+    d = {object: [] for object in centerlines.keys()}
+    for object, object_centerlines in centerlines.items():
+        l = []
+        for i, t in enumerate(object_centerlines):
+            l.append(
+                pd.DataFrame(
+                    {
+                        "frame": i,
+                        "x": t[0],
+                        "y": t[1],
+                    }
+                )
+            )
+        d[object] = pd.concat(l).reset_index(drop=True)
+    return d

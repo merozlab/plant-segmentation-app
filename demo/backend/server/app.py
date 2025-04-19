@@ -146,51 +146,42 @@ def gen_track_with_mask_stream(
 def maskify() -> Response:
     data = request.json
     base = UPLOADS_PATH / data["session_id"]
-    # Load the JSON file with mask data
-    for file in base.glob("*.json"):
+    # Collect all JSON files and sort by frame index
+    json_files = sorted(base.glob("*.json"), key=lambda f: int(f.stem.split("_")[-1]))
+    if not json_files:
+        return make_response("No mask JSON files found.", 404)
+
+    # Determine number of objects from the first file
+    with open(json_files[0], "r") as f:
+        mask_data = json.load(f)
+    num_objects = len(mask_data["results"])
+
+    # Prepare output directories for each object
+    object_dirs = []
+    masks_dir = base / "masks"
+    masks_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(num_objects):
+        obj_dir = masks_dir / f"object_{i+1}"
+        obj_dir.mkdir(parents=True, exist_ok=True)
+        object_dirs.append(obj_dir)
+
+    # Process each frame
+    for idx, file in enumerate(json_files):
         with open(file, "r") as f:
             mask_data = json.load(f)
-
-        # Create an empty image with the correct dimensions
         height, width = mask_data["results"][0]["mask"]["size"]
-        # Create a blank image (black background)
-        image = np.zeros((height, width, 3), dtype=np.uint8)
 
-        # Define colors for different objects - FIXME: this should be BGR
-        colors = [
-            (255, 225, 225),  # White
-            (0, 255, 0),  # Green
-            (0, 0, 255),  # Blue
-            (255, 255, 0),  # Yellow
-            (255, 0, 255),  # Magenta
-            (0, 255, 255),  # Cyan
-            (255, 165, 0),  # Orange
-            (128, 0, 128),  # Purple
-            (128, 255, 0),  # Lime
-            (0, 128, 128),  # Teal
-        ]
-
-        # Process each mask
-        for i, result in enumerate(mask_data["results"]):
-            # Get the mask in RLE format
+        for obj_idx, result in enumerate(mask_data["results"]):
             rle = result["mask"]
-            # Decode RLE to binary mask
             binary_mask = mask_util.decode(rle)
+            # Convert to uint8 and scale to 0/255 for black and white
+            bw_mask = (binary_mask * 255).astype(np.uint8)
+            output_path = object_dirs[obj_idx] / f"mask_{idx+1:05d}.jpg"
+            cv2.imwrite(str(output_path), bw_mask)
 
-            # Select a color for this mask
-            color = colors[i % len(colors)]
-
-            # Apply the mask with the selected color
-            for c in range(3):
-                image[:, :, c] = np.where(binary_mask == 1, color[c], image[:, :, c])
-
-        # Save as JPG
-        # Ensure the directory exists
-        output_dir = base / "masks"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / (file.stem.replace("frame", "mask") + ".jpg")
-        cv2.imwrite(output_path, image)
-    return make_response("Masks created successfully, zipping skipped.", 200)
+    return make_response(
+        "Masks created successfully, per-object folders generated.", 200
+    )
 
 
 @app.route("/zip", methods=["POST"])
@@ -203,8 +194,9 @@ def zip_masks() -> Response:
     directory = base / "masks"
     zip_name = session_id + "_masks.zip"
     with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for file in directory.glob("*.jpg"):
-            zipf.write(file, str(file.relative_to(directory)))
+        for file in directory.rglob("*"):
+            if file.is_file():
+                zipf.write(file, str(file.relative_to(directory)))
     # Send the zip file
     return send_from_directory(
         directory=str(base),
@@ -213,7 +205,7 @@ def zip_masks() -> Response:
     )
 
 
-@app.route("/centerline", methods=["POST"])
+@app.route("/centerlines", methods=["POST"])
 def centerline() -> Response:
     data = request.json
     session_id = data["session_id"]
@@ -225,17 +217,30 @@ def centerline() -> Response:
     elif not masks_dir.exists():
         return make_response("Masks not found", 404)
     base_coords: Tuple[int, int] = data["base_coords"][0]
-    centerlines = []
-    for frame in sorted(masks_dir.glob("*.jpg")):
-        contour = get_contours(frame)
-        start_index = find_closest_point(contour, base_coords)
-        centerline = get_centerline(contour, start_index, display=False)
-        centerlines.append(centerline)
+    objects = [f"object_{o + 1}" for o in range(len(data["base_coords"]))]
+    centerlines = {object: [] for object in objects}
+    for object in objects:
+        object_dir = masks_dir / object
+        for frame in sorted(object_dir.glob("*.jpg")):
+            contour = get_contours(frame)
+            start_index = find_closest_point(contour, base_coords)
+            centerline = get_centerline(contour, start_index, display=False)
+            centerlines[object].append(centerline)
     centerlines_df = centerlines_to_df(centerlines)
-    centerlines_df.to_csv(filename:=session_id + "_centerlines.csv", index=False)
+    centerlines_path = base / "centerlines"
+    centerlines_path.mkdir(exist_ok=True)
+    for object, df in centerlines_df.items():
+        df.to_csv(centerlines_path / f"{object}.csv", index=False)
+
+    zip_name = session_id + "_centerlines.zip"
+    with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for file in centerlines_path.glob("*"):
+            if file.is_file():
+                zipf.write(file, str(file.relative_to(centerlines_path)))
+    
     return send_from_directory(
         directory=str(base),
-        path=filename,
+        path=zip_name,
         as_attachment=True,
     )
 
