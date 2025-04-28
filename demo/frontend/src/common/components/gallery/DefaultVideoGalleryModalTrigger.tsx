@@ -13,20 +13,67 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ResponsiveButton from '@/common/components/button/ResponsiveButton';
-import type {VideoGalleryTriggerProps} from '@/common/components/gallery/DemoVideoGalleryModal';
-import {ImageCopy} from '@carbon/icons-react';
+import useUploadVideo from '@/common/components/gallery/useUploadVideo';
+import OptionButton from '@/common/components/options/OptionButton';
+import Logger from '@/common/logger/Logger';
+import useScreenSize from '@/common/screen/useScreenSize';
+import { sessionAtom, uploadingStateAtom } from '@/demo/atoms';
+import { Close, CloudUpload } from '@carbon/icons-react';
+import { useSetAtom } from 'jotai';
+import { useNavigate } from 'react-router-dom';
 
-export default function DefaultVideoGalleryModalTrigger({
-  onClick,
-}: VideoGalleryTriggerProps) {
+export default function DefaultVideoGalleryModalTrigger() {
+  const navigate = useNavigate();
+  const { isMobile } = useScreenSize();
+  const setUploadingState = useSetAtom(uploadingStateAtom);
+  const setSession = useSetAtom(sessionAtom);
+
+  const { getRootProps, getInputProps, isUploading, error } = useUploadVideo({
+    onUpload: videoData => {
+      navigate(
+        { pathname: location.pathname, search: location.search },
+        { state: { video: videoData } },
+      );
+      setUploadingState('default');
+      setSession(null);
+    },
+    onUploadError: (error: Error) => {
+      setUploadingState('error');
+      Logger.error(error);
+    },
+    onUploadStart: () => {
+      setUploadingState('uploading');
+    },
+  });
+
   return (
-    <ResponsiveButton
-      color="ghost"
-      className="hover:!bg-black"
-      startIcon={<ImageCopy size={20} />}
-      onClick={onClick}>
-      Change video
-    </ResponsiveButton>
+    <div className="cursor-pointer p-5 md:p-8 flex flex-col gap-4" {...getRootProps()}>
+      <input {...getInputProps()} />
+      <OptionButton
+        variant="default"
+        title={
+          error !== null ? (
+            'Upload Error'
+          ) : isMobile ? (
+            <>
+              Change video or images{' '}
+              <div className="text-xs opacity-70">
+                MP4 (max 140MB) or ZIP of images (max 1GB)
+              </div>
+            </>
+          ) : (
+            <>
+              Change video or images{' '}
+              <div className="text-xs opacity-70">
+                MP4 (max 140MB) or ZIP of images (max 1GB)
+              </div>
+            </>
+          )
+        }
+        Icon={error !== null ? Close : CloudUpload}
+        loadingProps={{ loading: isUploading, label: isUploading ? 'Uploading or processing...' : 'Uploading...' }}
+        onClick={() => { }}
+      />
+    </div>
   );
 }

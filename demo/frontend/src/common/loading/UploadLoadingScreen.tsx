@@ -13,13 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ChangeVideoModal from '@/common/components/gallery/ChangeVideoModal';
-import type {VideoGalleryTriggerProps} from '@/common/components/gallery/DemoVideoGalleryModal';
+import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
-import {uploadingStateAtom} from '@/demo/atoms';
-import {ImageCopy} from '@carbon/icons-react';
-import {useAtomValue} from 'jotai';
-import OptionButton from '../components/options/OptionButton';
+import { uploadingStateAtom } from '@/demo/atoms';
+import { useAtomValue } from 'jotai';
 
 export default function UploadLoadingScreen() {
   const uploadingState = useAtomValue(uploadingStateAtom);
@@ -30,9 +27,7 @@ export default function UploadLoadingScreen() {
         title="Uh oh, we cannot process this video"
         description="Please upload another video, and make sure that the video’s file size is less than 70Mb. ">
         <div className="max-w-[250px] w-full mx-auto">
-          <ChangeVideoModal
-            videoGalleryModalTrigger={UploadLoadingScreenChangeVideoTrigger}
-          />
+          <DefaultVideoGalleryModalTrigger />
         </div>
       </LoadingStateScreen>
     );
@@ -42,19 +37,6 @@ export default function UploadLoadingScreen() {
     <LoadingStateScreen
       title="Uploading video..."
       description="Sit tight while we upload your video."
-    />
-  );
-}
-
-function UploadLoadingScreenChangeVideoTrigger({
-  onClick,
-}: VideoGalleryTriggerProps) {
-  return (
-    <OptionButton
-      variant="gradient"
-      title="Change video"
-      Icon={ImageCopy}
-      onClick={onClick}
     />
   );
 }

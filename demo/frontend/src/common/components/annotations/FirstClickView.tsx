@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ChangeVideo from '@/common/components/gallery/ChangeVideoModal';
+import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
-import {DEMO_SHORT_NAME} from '@/demo/DemoConfig';
-import {useEffect, useRef} from 'react';
+import { DEMO_SHORT_NAME } from '@/demo/DemoConfig';
+import { useEffect, useRef } from 'react';
 
 export default function FirstClickView() {
   const isFirstClickMessageShown = useRef(false);
-  const {enqueueMessage} = useMessagesSnackbar();
+  const { enqueueMessage } = useMessagesSnackbar();
 
   useEffect(() => {
     if (!isFirstClickMessageShown.current) {
@@ -42,7 +42,7 @@ export default function FirstClickView() {
         </p>
       </div>
       <div className="flex items-center">
-        <ChangeVideo />
+        <DefaultVideoGalleryModalTrigger />
       </div>
     </div>
   );

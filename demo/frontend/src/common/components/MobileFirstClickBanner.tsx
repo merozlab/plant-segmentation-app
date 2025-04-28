@@ -13,12 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ChangeVideoModal from '@/common/components/gallery/ChangeVideoModal';
-import {DEMO_SHORT_NAME} from '@/demo/DemoConfig';
-import {spacing} from '@/theme/tokens.stylex';
-import {ImageCopy} from '@carbon/icons-react';
+import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
+import { DEMO_SHORT_NAME } from '@/demo/DemoConfig';
+import { spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
-import {Button} from 'react-daisyui';
 
 const styles = stylex.create({
   container: {
@@ -46,29 +44,8 @@ export default function MobileFirstClickBanner() {
         </p>
       </div>
       <div className="flex items-center">
-        <ChangeVideoModal
-          videoGalleryModalTrigger={MobileVideoGalleryModalTrigger}
-          showUploadInGallery={true}
-        />
+        <DefaultVideoGalleryModalTrigger />
       </div>
     </div>
-  );
-}
-
-type MobileVideoGalleryModalTriggerProps = {
-  onClick: () => void;
-};
-
-function MobileVideoGalleryModalTrigger({
-  onClick,
-}: MobileVideoGalleryModalTriggerProps) {
-  return (
-    <Button
-      color="ghost"
-      startIcon={<ImageCopy size={20} />}
-      onClick={onClick}
-      className="text-white p-0">
-      Change video
-    </Button>
   );
 }

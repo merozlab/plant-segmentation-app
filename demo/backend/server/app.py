@@ -17,6 +17,8 @@ import cv2
 from pycocotools import mask as mask_util
 from pathlib import Path
 import zipfile
+import threading
+import time
 
 from app_conf import (
     GALLERY_PATH,
@@ -237,7 +239,7 @@ def centerline() -> Response:
         for file in centerlines_path.glob("*"):
             if file.is_file():
                 zipf.write(file, str(file.relative_to(centerlines_path)))
-    
+
     return send_from_directory(
         directory=str(base),
         path=zip_name,
@@ -266,6 +268,90 @@ app.add_url_rule(
         multipart_uploads_enabled=True,
     ),
 )
+
+
+PROCESSING_STATUS = {}
+
+
+@app.route("/api/video_status/<video_id>", methods=["GET"])
+def video_status(video_id):
+    status = PROCESSING_STATUS.get(video_id, None)
+    if status is None:
+        return {"status": "not_found"}, 404
+    if status["status"] == "ready":
+        # Return video data (simulate, or load from DB)
+        # You may want to return more fields as needed
+        return {"status": "ready", "video": status["video"]}
+    elif status["status"] == "processing":
+        return {"status": "processing"}, 200
+    else:
+        return {"status": "error"}, 500
+
+
+def convert_zip_to_video_async(zip_path, video_id, upload_dir):
+    try:
+        # Unpack zip
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(upload_dir)
+        # Find images
+        images = sorted(
+            [
+                str(p)
+                for p in Path(upload_dir).glob("**/*")
+                if p.suffix.lower() in [".jpg", ".jpeg", ".png"]
+            ]
+        )
+        if not images:
+            PROCESSING_STATUS[video_id] = {"status": "error"}
+            return
+        # Use ffmpeg to convert images to video
+        video_path = str(Path(upload_dir) / f"{video_id}.mp4")
+        import subprocess
+
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",
+            "-framerate",
+            "24",
+            "-pattern_type",
+            "glob",
+            "-i",
+            f"{upload_dir}/*.jpg",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-vf",
+            "scale=1280:720:force_original_aspect_ratio=decrease",
+            video_path,
+        ]
+        subprocess.run(ffmpeg_cmd, check=True)
+        # Simulate video data (replace with actual video info as needed)
+        PROCESSING_STATUS[video_id] = {
+            "status": "ready",
+            "video": {"id": video_id, "url": f"/uploads/{video_id}.mp4"},
+        }
+    except Exception as e:
+        PROCESSING_STATUS[video_id] = {"status": "error"}
+
+
+@app.route("/upload_zip", methods=["POST"])
+def upload_zip():
+    file = request.files.get("file")
+    if not file or not file.filename.endswith(".zip"):
+        return make_response("No zip file uploaded", 400)
+    if file.content_length and file.content_length > 1024 * 1024 * 1024:
+        return make_response("Zip file too large (max 1GB)", 413)
+    video_id = Path(file.filename).stem + str(int(time.time()))
+    upload_dir = UPLOADS_PATH / video_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = upload_dir / file.filename
+    file.save(zip_path)
+    PROCESSING_STATUS[video_id] = {"status": "processing"}
+    threading.Thread(
+        target=convert_zip_to_video_async, args=(zip_path, video_id, upload_dir)
+    ).start()
+    return {"status": "processing", "id": video_id}
 
 
 if __name__ == "__main__":
