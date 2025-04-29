@@ -44,7 +44,7 @@ def distribute_points(x, y, n_points):
     return x_uniform, y_uniform
 
 
-def get_centerline(contour, start_index, dist=100, display=False):
+def get_centerline(contour, start_index, dist=200, display=False):
     shifted_contour = np.concatenate((contour[start_index:], contour[:start_index]))
     x, y = shifted_contour[:, 0, 0], shifted_contour[:, 0, 1]
     x_unif, y_unif = distribute_points(x, y, dist)
