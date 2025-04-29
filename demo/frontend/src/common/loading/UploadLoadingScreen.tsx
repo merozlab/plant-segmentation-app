@@ -15,17 +15,21 @@
  */
 import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
-import { uploadingStateAtom } from '@/demo/atoms';
+import { uploadingStateAtom, uploadErrorMessageAtom } from '@/demo/atoms';
 import { useAtomValue } from 'jotai';
 
 export default function UploadLoadingScreen() {
   const uploadingState = useAtomValue(uploadingStateAtom);
+  const errorMessage = useAtomValue(uploadErrorMessageAtom);
 
   if (uploadingState === 'error') {
+    const defaultDescription =
+      "Please upload another video, and make sure that the video's file size is less than 140MB or use a ZIP file with images in the root folder.";
+
     return (
       <LoadingStateScreen
-        title="Uh oh, we cannot process this video"
-        description="Please upload another video, and make sure that the video’s file size is less than 70Mb. ">
+        title="Uh oh, we cannot process this file"
+        description={errorMessage || defaultDescription}>
         <div className="max-w-[250px] w-full mx-auto">
           <DefaultVideoGalleryModalTrigger />
         </div>
@@ -35,8 +39,8 @@ export default function UploadLoadingScreen() {
 
   return (
     <LoadingStateScreen
-      title="Uploading video..."
-      description="Sit tight while we upload your video."
+      title="Processing..."
+      description="Sit tight while we process your file. This may take a moment."
     />
   );
 }

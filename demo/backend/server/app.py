@@ -19,6 +19,8 @@ from pathlib import Path
 import zipfile
 import threading
 import time
+import os
+import re
 
 from app_conf import (
     GALLERY_PATH,
@@ -27,6 +29,7 @@ from app_conf import (
     POSTERS_PREFIX,
     UPLOADS_PATH,
     UPLOADS_PREFIX,
+    IS_LOCAL_DEPLOYMENT,
 )
 from data.loader import preload_data
 from data.schema import schema
@@ -148,7 +151,19 @@ def gen_track_with_mask_stream(
 def maskify() -> Response:
     data = request.json
     base = UPLOADS_PATH / data["session_id"]
+    print("data", data)
+    # get original file names
+    original_file_names = []
+    if data.get("original_file_path", None):
+        original_folder_path = UPLOADS_PATH / data["original_file_path"].strip("/")
+        if original_folder_path.exists():
+            original_file_names = [
+                x.stem for x in sorted(original_folder_path.glob("*"))
+            ]
+            print("original filenames", original_file_names[:10])
+
     # Collect all JSON files and sort by frame index
+
     json_files = sorted(base.glob("*.json"), key=lambda f: int(f.stem.split("_")[-1]))
     if not json_files:
         return make_response("No mask JSON files found.", 404)
@@ -178,7 +193,15 @@ def maskify() -> Response:
             binary_mask = mask_util.decode(rle)
             # Convert to uint8 and scale to 0/255 for black and white
             bw_mask = (binary_mask * 255).astype(np.uint8)
-            output_path = object_dirs[obj_idx] / f"mask_{idx+1:05d}.jpg"
+            # Use original file name if available, else fallback to mask_{idx+1:05d}.jpg
+            if original_file_names:
+                # Use the original file name and append the object index
+                original_file_name = original_file_names[idx]
+                output_filename = f"{original_file_name}_mask.jpg"
+            else:
+                # Fallback to using the index
+                output_filename = f"{idx+1:05d}_mask.jpg"
+            output_path = object_dirs[obj_idx] / output_filename
             cv2.imwrite(str(output_path), bw_mask)
 
     return make_response(
@@ -285,7 +308,9 @@ def video_status(video_id):
     elif status["status"] == "processing":
         return {"status": "processing"}, 200
     else:
-        return {"status": "error"}, 500
+        # Return error message if available
+        error_message = status.get("message", "Unknown error processing the file")
+        return {"status": "error", "message": error_message}, 500
 
 
 def convert_zip_to_video_async(zip_path, video_id, upload_dir):
@@ -293,19 +318,43 @@ def convert_zip_to_video_async(zip_path, video_id, upload_dir):
         # Unpack zip
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(upload_dir)
-        # Find images
-        images = sorted(
-            [
-                str(p)
-                for p in Path(upload_dir).glob("**/*")
-                if p.suffix.lower() in [".jpg", ".jpeg", ".png"]
+
+        # Get zip file contents for better error messages
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            files = zip_ref.namelist()
+
+            # Check if there are any files that look like images
+            image_extensions = {".jpg", ".jpeg", ".png"}
+            potential_images = [
+                f
+                for f in files
+                if any(f.lower().endswith(ext) for ext in image_extensions)
             ]
-        )
-        if not images:
-            PROCESSING_STATUS[video_id] = {"status": "error"}
-            return
+            print(
+                f"ZIP contents ({len(potential_images)} files): {potential_images[:10]}"
+            )  # Log first 10 files for debugging
+
+            if not potential_images:
+                PROCESSING_STATUS[video_id] = {
+                    "status": "error",
+                    "message": "The uploaded ZIP file doesn't contain any image files (.jpg, .jpeg, .png)",
+                }
+                return
+
+            # Check if images are all in root directory or nested
+            root_images = [
+                f for f in potential_images if "/" not in f and "\\" not in f
+            ]
+            if not root_images:
+                PROCESSING_STATUS[video_id] = {
+                    "status": "error",
+                    "message": "The ZIP file must contain images directly in the root folder, not in subfolders",
+                }
+                return
+            ext = root_images[0].split(".")[-1]
+
         # Use ffmpeg to convert images to video
-        video_path = str(Path(upload_dir) / f"{video_id}.mp4")
+        video_path = str(Path(upload_dir).parent / f"{video_id}.mp4")
         import subprocess
 
         ffmpeg_cmd = [
@@ -316,7 +365,7 @@ def convert_zip_to_video_async(zip_path, video_id, upload_dir):
             "-pattern_type",
             "glob",
             "-i",
-            f"{upload_dir}/*.jpg",
+            f"{upload_dir}/*.{ext}",
             "-c:v",
             "libx264",
             "-pix_fmt",
@@ -325,14 +374,45 @@ def convert_zip_to_video_async(zip_path, video_id, upload_dir):
             "scale=1280:720:force_original_aspect_ratio=decrease",
             video_path,
         ]
-        subprocess.run(ffmpeg_cmd, check=True)
+
+        # Capture output and error for better error handling
+        result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            error_output = result.stderr
+            print(f"FFMPEG error: {error_output}")
+
+            if "Output file #0 does not contain any stream" in error_output:
+                PROCESSING_STATUS[video_id] = {
+                    "status": "error",
+                    "message": "The ZIP file must contain JPG images directly in the root folder, not in subfolders",
+                }
+            elif "No such file or directory" in error_output:
+                PROCESSING_STATUS[video_id] = {
+                    "status": "error",
+                    "message": "No JPG images found in the root of the ZIP file. Please include JPG images directly in the ZIP, not in subfolders.",
+                }
+            else:
+                PROCESSING_STATUS[video_id] = {
+                    "status": "error",
+                    "message": f"Failed to convert images to video: {error_output[:100]}...",
+                }
+            return
+
         # Simulate video data (replace with actual video info as needed)
         PROCESSING_STATUS[video_id] = {
             "status": "ready",
-            "video": {"id": video_id, "url": f"/uploads/{video_id}.mp4"},
+            "video": {"id": f"{video_id}", "url": f"/uploads/{video_id}.mp4"},
         }
+        # Clean up the zip file after processing
+        zip_path.unlink(missing_ok=True)
+        print(f"Video {video_id} processed successfully. Saved to {video_path}")
     except Exception as e:
-        PROCESSING_STATUS[video_id] = {"status": "error"}
+        PROCESSING_STATUS[video_id] = {
+            "status": "error",
+            "message": str(e) if str(e) else "Unknown error processing ZIP file",
+        }
+        print(f"Exception processing video {video_id}: {str(e)}")
 
 
 @app.route("/upload_zip", methods=["POST"])
@@ -352,6 +432,183 @@ def upload_zip():
         target=convert_zip_to_video_async, args=(zip_path, video_id, upload_dir)
     ).start()
     return {"status": "processing", "id": video_id}
+
+
+# Add local folder processing endpoint if IS_LOCAL_DEPLOYMENT is enabled
+if IS_LOCAL_DEPLOYMENT:
+
+    @app.route("/process_local_folder", methods=["POST"])
+    def process_local_folder():
+        """Process a local folder of images into a video (only available in local deployment)"""
+        data = request.json
+        if not data or "folderPath" not in data:
+            return make_response("No folder name provided", 400)
+
+        folder_name = data["folderPath"].strip()
+        # For security, restrict the folder to be within the uploads directory
+        folder_path = UPLOADS_PATH / folder_name
+
+        if not folder_path.exists() or not folder_path.is_dir():
+            return make_response(
+                f"Folder '{folder_name}' not found in uploads directory", 404
+            )
+
+        # Generate a unique ID for this processing job
+        # Include folder name to make it more identifiable
+        timestamp = int(time.time())
+        safe_folder_name = "".join(c if c.isalnum() else "_" for c in folder_name)[:20]
+        video_id = f"local_{safe_folder_name}_{timestamp}"
+        upload_dir = UPLOADS_PATH / video_id
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set the initial processing status
+        PROCESSING_STATUS[video_id] = {"status": "processing", "folder": folder_name}
+
+        # Start processing in a separate thread
+        threading.Thread(
+            target=process_local_folder_async, args=(folder_path, video_id, upload_dir)
+        ).start()
+
+        return {"status": "processing", "id": video_id}
+
+    def process_local_folder_async(folder_path, video_id, upload_dir):
+        try:
+            # Find all image files in the folder
+            image_extensions = [".jpg", ".jpeg", ".png"]
+            images = []
+            for ext in image_extensions:
+                try:
+                    files = list(folder_path.glob(f"*{ext}"))
+                    images.extend(files)
+                    upper_files = list(folder_path.glob(f"*{ext.upper()}"))
+                    images.extend(upper_files)
+                    print(
+                        f"Found {len(files)} {ext} files and {len(upper_files)} {ext.upper()} files"
+                    )
+                except Exception as ext_err:
+                    print(f"Error searching for {ext} files: {str(ext_err)}")
+
+            # Sort images naturally (so 1.jpg comes before 10.jpg)
+            try:
+
+                def natural_sort_key(s):
+                    return [
+                        int(text) if text.isdigit() else text.lower()
+                        for text in re.split(r"(\d+)", str(s.name))
+                    ]
+
+                images = sorted(images, key=natural_sort_key)
+                print(f"Sorted {len(images)} images naturally")
+            except Exception as sort_err:
+                print(
+                    f"Error during natural sorting, falling back to basic sort: {str(sort_err)}"
+                )
+                images = sorted(images, key=lambda x: str(x.name))
+
+            if not images:
+                PROCESSING_STATUS[video_id] = {
+                    "status": "error",
+                    "message": f"No image files found in the folder '{folder_path.name}'",
+                }
+                return
+
+            print(f"Found {len(images)} images in {folder_path}")
+
+            # Create a text file listing all image files in their correct order
+            filelist_path = upload_dir / "filelist.txt"
+            with open(filelist_path, "w") as f:
+                for img_path in images:
+                    # Write the format expected by ffmpeg: file '/path/to/image.jpg'
+                    f.write(f"file '{img_path.absolute()}'\n")
+
+            print(f"Created filelist with {len(images)} images at {filelist_path}")
+
+            # Use ffmpeg to convert images to video using the filelist
+            video_path = str(Path(upload_dir).parent / f"{video_id}.mp4")
+            import subprocess
+
+            ffmpeg_cmd = [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(filelist_path),
+                "-framerate",
+                "24",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-vf",
+                "scale=1280:720:force_original_aspect_ratio=decrease",
+                video_path,
+            ]
+            print(*ffmpeg_cmd)
+
+            # Capture output and error for better error handling
+            result = subprocess.run(
+                ffmpeg_cmd, check=False, capture_output=True, text=True
+            )
+
+            if result.returncode != 0:
+                error_output = result.stderr
+                print(f"FFMPEG error: {error_output}")
+
+                if "Output file #0 does not contain any stream" in error_output:
+                    PROCESSING_STATUS[video_id] = {
+                        "status": "error",
+                        "message": "No valid image files found in the folder for processing",
+                    }
+                elif "No such file or directory" in error_output:
+                    PROCESSING_STATUS[video_id] = {
+                        "status": "error",
+                        "message": "Error accessing image files. Please check file permissions.",
+                    }
+                elif "does not contain any stream" in error_output:
+                    PROCESSING_STATUS[video_id] = {
+                        "status": "error",
+                        "message": "Could not process the images. Please make sure they are valid image files.",
+                    }
+                else:
+                    PROCESSING_STATUS[video_id] = {
+                        "status": "error",
+                        "message": f"Failed to convert images to video: {error_output[:100]}...",
+                    }
+                return
+            # Delete the filelist.txt file after successful processing
+            try:
+                filelist_path.unlink(missing_ok=True)
+                print(f"Deleted temporary filelist at {filelist_path}")
+            except Exception as del_err:
+                print(f"Note: Could not delete temporary filelist: {str(del_err)}")
+            # Set the video data in the processing status
+            PROCESSING_STATUS[video_id] = {
+                "status": "ready",
+                "video": {
+                    "id": f"/uploads/{video_id}",
+                    "url": f"/uploads/{video_id}.mp4",
+                    "original_folder": str(folder_path),
+                },
+            }
+            print(f"Video {video_id} processed successfully. Saved to {video_path}")
+
+        except Exception as e:
+            PROCESSING_STATUS[video_id] = {
+                "status": "error",
+                "message": str(e) if str(e) else "Unknown error processing folder",
+            }
+            print(f"Exception processing folder {video_id}: {str(e)}")
+
+else:
+    # When IS_LOCAL_DEPLOYMENT is false, provide a disabled endpoint that returns a clear message
+    @app.route("/process_local_folder", methods=["POST"])
+    def process_local_folder():
+        return make_response(
+            "Local folder processing is disabled in this deployment", 403
+        )
 
 
 if __name__ == "__main__":

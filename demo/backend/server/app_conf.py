@@ -15,7 +15,12 @@ API_URL = os.getenv("API_URL", "http://localhost:7263")
 
 MODEL_SIZE = os.getenv("MODEL_SIZE", "base_plus")
 
+# Feature flags
+# Set to "true" for local development, "false" for production
+IS_LOCAL_DEPLOYMENT = os.getenv("IS_LOCAL_DEPLOYMENT", "true").lower() == "true"
+
 logger.info(f"using model size {MODEL_SIZE}")
+logger.info(f"local deployment mode: {IS_LOCAL_DEPLOYMENT}")
 
 FFMPEG_NUM_THREADS = int(os.getenv("FFMPEG_NUM_THREADS", "1"))
 

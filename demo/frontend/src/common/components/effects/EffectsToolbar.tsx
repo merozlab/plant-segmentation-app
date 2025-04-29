@@ -17,28 +17,28 @@ import EffectsToolbarBottomActions from '@/common/components/effects/EffectsTool
 import EffectsToolbarHeader from '@/common/components/effects/EffectsToolbarHeader';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import useVideoEffect from '@/common/components/video/editor/useVideoEffect';
-import {EffectIndex} from '@/common/components/video/effects/Effects';
+import { EffectIndex } from '@/common/components/video/effects/Effects';
 import ToolbarSection from '@/common/components/toolbar/ToolbarSection';
 // import {Image, Erase, FilterRemove} from '@carbon/icons-react';
-import {FilterRemove} from '@carbon/icons-react';
+import { FilterRemove } from '@carbon/icons-react';
 // import ToolbarActionIcon from '@/common/components/toolbar/ToolbarActionIcon';
-import {useEffect, useRef, useCallback} from 'react';
-import {Button} from 'react-daisyui';
+import { useEffect, useRef, useCallback } from 'react';
+import { Button } from 'react-daisyui';
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function EffectsToolbar({onTabChange}: Props) {
+export default function EffectsToolbar({ onTabChange }: Props) {
   const isEffectsMessageShown = useRef(false);
-  const {enqueueMessage} = useMessagesSnackbar();
+  const { enqueueMessage } = useMessagesSnackbar();
   const setEffect = useVideoEffect();
 
   // Apply effects with EraseBackground and EraseForeground
   const handleApplyEraseEffects = useCallback(() => {
     // Apply EraseBackground to background
     setEffect('EraseBackground', EffectIndex.BACKGROUND, { variant: 0 });
-    
+
     // Apply EraseForeground to objects
     setEffect('EraseForeground', EffectIndex.HIGHLIGHT, { variant: 0 });
   }, [setEffect]);
@@ -47,10 +47,10 @@ export default function EffectsToolbar({onTabChange}: Props) {
   useEffect(() => {
     // Apply overlay effect to objects
     setEffect('Overlay', EffectIndex.HIGHLIGHT);
-    
+
     // Apply black background
-    setEffect('EraseBackground', EffectIndex.BACKGROUND);
-    
+    // setEffect('EraseBackground', EffectIndex.BACKGROUND);
+
     if (!isEffectsMessageShown.current) {
       isEffectsMessageShown.current = true;
       enqueueMessage('effectsMessage');
@@ -72,7 +72,7 @@ export default function EffectsToolbar({onTabChange}: Props) {
             onClick={() => {}} // No action needed, already applied
           />
           {/* Other effects disabled */}
-          {/*<ToolbarActionIcon
+        {/*<ToolbarActionIcon
             variant="toggle" 
             icon={Erase}
             title="Other Effects (Disabled)"
@@ -92,8 +92,8 @@ export default function EffectsToolbar({onTabChange}: Props) {
             isDisabled={true}
             onClick={() => {}} // No action needed, already applied
           /> */}
-          {/* Other effects disabled */}
-          {/*<ToolbarActionIcon
+        {/* Other effects disabled */}
+        {/*<ToolbarActionIcon
             variant="toggle"
             icon={Image}
             title="Other Effects (Disabled)"

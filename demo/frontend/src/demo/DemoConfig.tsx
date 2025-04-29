@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {Effects} from '@/common/components/video/effects/Effects';
+import { Effects } from '@/common/components/video/effects/Effects';
 
 type EffectLayers = {
   background: keyof Effects;
@@ -34,6 +34,24 @@ export const BLOG_URL = 'http://ai.meta.com/blog/sam2';
 
 export const VIDEO_API_ENDPOINT = 'http://localhost:7263';
 export const INFERENCE_API_ENDPOINT = 'http://localhost:7263';
+
+// Path configurations
+/**
+ * UPLOADS_DIRECTORY
+ * Path to the directory where user folders should be placed for local processing
+ * This should match the server's uploads directory path in a local development setup
+ */
+export const UPLOADS_DIRECTORY = '/home/yasmine/alex/plant-segmentation-app/demo/data/uploads';
+
+// Feature flags
+/**
+ * IS_LOCAL_DEPLOYMENT
+ * Set to true for local development environments where you want to enable
+ * features like local folder processing.
+ * Set to false for production/remote deployments where local file system 
+ * access is not available or should be disabled for security reasons.
+ */
+export const IS_LOCAL_DEPLOYMENT = true;
 
 export const demoObjectLimit = 3;
 

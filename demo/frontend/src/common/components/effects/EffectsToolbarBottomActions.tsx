@@ -27,6 +27,7 @@ import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import { ChevronRight } from '@carbon/icons-react';
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom';
 import { useState } from 'react';
+import { originalFilePathAtom } from '@/demo/atoms';
 
 
 type Props = {
@@ -35,6 +36,8 @@ type Props = {
 
 export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom); // Get the current session
+  const originalFilePath = useAtomValue(originalFilePathAtom);
+  console.log('originalFilePath', originalFilePath);
   const [, setMasksReady] = useAtom(masksReadyAtom); // We only need the setter here
   const { enqueueMessage, clearMessage } = useMessagesSnackbar();
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +52,7 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
     setIsLoading(true); // Set loading state to true
     // Show mask generation in-progress message
     // enqueueMessage('maskGenerationStart');
-    
+
     try {
       // Call the /maskify endpoint asynchronously
       const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, {
@@ -58,9 +61,9 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
           'Content-Type': 'application/json',
         },
         // Send zip: false as we only need the server to generate masks, not zip them for download yet
-        body: JSON.stringify({ session_id: session.id, zip: false }),
+        body: JSON.stringify({ session_id: session.id, original_file_path: originalFilePath }),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Maskify request failed: ${response.status} - ${errorText}`);
