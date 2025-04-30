@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {SegmentationPoint} from '@/common/tracker/Tracker';
+import { SegmentationPoint } from '@/common/tracker/Tracker';
 import stylex from '@stylexjs/stylex';
-import {useMemo} from 'react';
+import { useMemo } from 'react';
 import useResizeObserver from 'use-resize-observer';
 import useVideo from '../editor/useVideo';
+import { useAtomValue } from 'jotai';
+import { activeTrackletObjectIdAtom, trackletObjectsAtom } from '@/demo/atoms';
+import React from 'react';
 
 const styles = stylex.create({
   container: {
@@ -33,9 +36,13 @@ type Props = {
   onRemovePoint: (point: SegmentationPoint) => void;
 };
 
-export function BasePointsLayer({points, onRemovePoint}: Props) {
+export function BasePointsLayer({ points, onRemovePoint }: Props) {
   const video = useVideo();
   const videoCanvas = useMemo(() => video?.getCanvas(), [video]);
+
+  // Get active tracklet ID and all tracklets
+  const activeTrackletId = useAtomValue(activeTrackletObjectIdAtom);
+  const tracklets = useAtomValue(trackletObjectsAtom);
 
   const {
     ref,
@@ -54,7 +61,10 @@ export function BasePointsLayer({points, onRemovePoint}: Props) {
   }, [canvasWidth, canvasHeight, containerWidth, containerHeight]);
 
   const pointRadius = useMemo(() => 4 * sizeMultiplier, [sizeMultiplier]);
-  const pointStroke = useMemo(() => 2 * sizeMultiplier, [sizeMultiplier]);
+
+  // Define stroke widths - regular for normal points, larger for active tracklet points
+  const regularStrokeWidth = useMemo(() => 2 * sizeMultiplier, [sizeMultiplier]);
+  const activeStrokeWidth = useMemo(() => 4 * sizeMultiplier, [sizeMultiplier]);
 
   return (
     <svg
@@ -75,17 +85,51 @@ export function BasePointsLayer({points, onRemovePoint}: Props) {
       */}
       {/* Render points */}
       {points.map((point, idx) => {
+        // Check if this point belongs to the active tracklet
+        // For BasePointsLayer, we compare coordinates with the basePoint of each tracklet
+        let isActiveTrackletPoint = false;
+        console.log('Active tracklet ID:', activeTrackletId);
+        console.log('Tracklets:', tracklets);
+        console.log('Point:', point);
+        console.log('BasePoint:', tracklets.map(tracklet => tracklet.basePoint));
+        // Find tracklet with matching basePoint
+        for (const tracklet of tracklets) {
+          if (tracklet.id === activeTrackletId && tracklet.basePoint && tracklet.basePoint.length > 0) {
+            const basePoint = tracklet.basePoint[0];
+
+            // Safely extract coordinates with proper type checking
+            const baseX = basePoint && Array.isArray(basePoint) ? Number(basePoint[0]) : null;
+            const baseY = basePoint && Array.isArray(basePoint) ? Number(basePoint[1]) : null;
+            const pointX = Number(point[0]);
+            const pointY = Number(point[1]);
+
+            // Check if the coordinates match the current point
+            if (baseX !== null && baseY !== null &&
+              !isNaN(baseX) && !isNaN(baseY) &&
+              !isNaN(pointX) && !isNaN(pointY) &&
+              Math.abs(baseX - pointX) < 0.5 &&
+              Math.abs(baseY - pointY) < 0.5) {
+              isActiveTrackletPoint = true;
+              break;
+            }
+          }
+        }
+
+        // All points are red, but active points have thicker stroke
+        const strokeWidth = isActiveTrackletPoint ? activeStrokeWidth : regularStrokeWidth;
+        console.log('Point:', point, 'isActiveTrackletPoint:', isActiveTrackletPoint);
         return (
           <g key={idx} className="cursor-pointer">
             <circle
-              className="stroke-white hover:stroke-gray-400"
+              className="hover:stroke-gray-400"
+              style={{ stroke: 'red' }}
               pointerEvents="visiblePainted"
-              cx={point[0]}
-              cy={point[1]}
+              cx={Number(point[0])}
+              cy={Number(point[1])}
               r={pointRadius}
               fill="rgba(0,0,0,0)"
-              strokeWidth={pointStroke}
-              onClick={event => {
+              strokeWidth={strokeWidth}
+              onClick={(event: React.MouseEvent) => {
                 event.stopPropagation();
                 onRemovePoint(point);
               }}

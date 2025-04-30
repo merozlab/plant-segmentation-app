@@ -20,6 +20,7 @@ import { Button } from 'react-daisyui';
 import { ChevronLeft, Download } from '@carbon/icons-react';
 import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import {
+  DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
 import { trackletObjectsAtom, activeTrackletObjectIdAtom, sessionAtom, frameIndexAtom } from '@/demo/atoms';
@@ -63,7 +64,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     setActiveTrackletObjectId(0);
   }, []);
   const handleBack = () => {
-    onTabChange(2); // Go back to More Options tab (index 2)
+    onTabChange(DOWNLOAD_TOOLBAR_INDEX); // Go back to More Options tab (index 2)
   };
 
   const allPointsSelected = trackletObjects.every(obj => obj.basePoint);

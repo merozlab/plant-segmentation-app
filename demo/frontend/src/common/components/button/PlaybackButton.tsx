@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// import {OBJECT_TOOLBAR_INDEX} from '@/common/components/toolbar/ToolbarConfig';
 import Tooltip from '@/common/components/Tooltip';
-import {isFrameExtractionInProgressAtom} from '@/common/components/options/useDownloadVideo';
+import { isFrameExtractionInProgressAtom } from '@/common/components/options/useDownloadVideo';
 import useVideo from '@/common/components/video/editor/useVideo';
-import {isPlayingAtom, streamingStateAtom} from '@/demo/atoms'; // toolbarTabIndex
-import {PauseFilled, PlayFilledAlt} from '@carbon/icons-react';
-import {useAtomValue} from 'jotai';
-import {useCallback, useEffect} from 'react';
+import { isPlayingAtom, streamingStateAtom } from '@/demo/atoms'; // toolbarTabIndex
+import { PauseFilled, PlayFilledAlt } from '@carbon/icons-react';
+import { useAtomValue } from 'jotai';
+import { useCallback, useEffect } from 'react';
 
 export default function PlaybackButton() {
   // const tabIndex = useAtomValue(toolbarTabIndex);
@@ -32,7 +31,7 @@ export default function PlaybackButton() {
   // Disable the button during frame extraction 
   // or when we're in a partial streaming state
   const isDisabled =
-    isFrameExtractionInProgress || 
+    isFrameExtractionInProgress ||
     (streamingState === 'requesting' || streamingState === 'aborting');
 
   const handlePlay = useCallback(() => {

@@ -22,7 +22,7 @@ import ToolbarSection from '@/common/components/toolbar/ToolbarSection';
 // import {Image, Erase, FilterRemove} from '@carbon/icons-react';
 import { FilterRemove } from '@carbon/icons-react';
 // import ToolbarActionIcon from '@/common/components/toolbar/ToolbarActionIcon';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Button } from 'react-daisyui';
 
 type Props = {
@@ -34,16 +34,40 @@ export default function EffectsToolbar({ onTabChange }: Props) {
   const { enqueueMessage } = useMessagesSnackbar();
   const setEffect = useVideoEffect();
 
-  // Apply effects with EraseBackground and EraseForeground
+  // State to track the current effect mode (0 = default, 1 = full erase, 2 = background only erase)
+  const [effectMode, setEffectMode] = useState(0);
+
+  // Toggle between three modes:
+  // 0 - Default (Original background, Overlay foreground)
+  // 1 - Full erase (EraseBackground + EraseForeground) 
+  // 2 - Background only erase (EraseBackground + Original foreground)
   const handleApplyEraseEffects = useCallback(() => {
-    // Apply EraseBackground to background
-    setEffect('EraseBackground', EffectIndex.BACKGROUND, { variant: 0 });
+    // Cycle through the three modes
+    const nextMode = (effectMode + 1) % 3;
 
-    // Apply EraseForeground to objects
-    setEffect('EraseForeground', EffectIndex.HIGHLIGHT, { variant: 0 });
-  }, [setEffect]);
+    // Apply effects based on the next mode
+    switch (nextMode) {
+      case 0: // Reset to default
+        setEffect('Original', EffectIndex.BACKGROUND, { variant: 0 });
+        setEffect('Overlay', EffectIndex.HIGHLIGHT, { variant: 0 });
+        break;
 
-  // Auto-apply white object mask and black background on first render
+      case 1: // Background only erase
+        setEffect('EraseBackground', EffectIndex.BACKGROUND, { variant: 0 });
+        setEffect('Cutout', EffectIndex.HIGHLIGHT, { variant: 0 });
+        // setEffect('EraseForeground', EffectIndex.HIGHLIGHT, { variant: 0 });
+        break;
+
+      case 2: // Full erase mode
+        setEffect('EraseBackground', EffectIndex.BACKGROUND, { variant: 0 });
+        setEffect('EraseForeground', EffectIndex.HIGHLIGHT, { variant: 0 });
+        break;
+    }
+
+    // Update the mode state
+    setEffectMode(nextMode);
+  }, [setEffect, effectMode]);
+
   useEffect(() => {
     // Apply overlay effect to objects
     setEffect('Overlay', EffectIndex.HIGHLIGHT);
@@ -108,10 +132,11 @@ export default function EffectsToolbar({ onTabChange }: Props) {
           <Button
             color="ghost"
             size="md"
-            className="col-span-4 my-2 font-medium bg-black hover:bg-gray-900 text-white !rounded-lg"
+            className={`col-span-4 my-2 font-medium'bg-black hover:bg-gray-900 text-white !rounded-lg`}
             startIcon={<FilterRemove size={24} />}
             onClick={handleApplyEraseEffects}>
-            Create Masks
+            {effectMode === 0 ? 'Erase Background' :
+              effectMode === 1 ? 'Masks Only' : 'Masks Overlay'}
           </Button>
         </ToolbarSection>
       </div>

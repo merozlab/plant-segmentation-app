@@ -36,6 +36,8 @@ import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
 import useScreenSize from '@/common/screen/useScreenSize';
 import { SegmentationPoint } from '@/common/tracker/Tracker';
+import ToggleEffectsButton from '@/common/components/button/ToggleEffectsButton';
+
 import {
   activeTrackletObjectIdAtom,
   frameIndexAtom,
@@ -56,7 +58,6 @@ import stylex from '@stylexjs/stylex';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useEffect, useState } from 'react';
 import type { ErrorObject } from 'serialize-error';
-
 
 
 const styles = stylex.create({
@@ -117,13 +118,10 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   const isPlaying = useAtomValue(isPlayingAtom);
   const isVideoLoading = useAtomValue(isVideoLoadingAtom);
   const uploadingState = useAtomValue(uploadingStateAtom);
-
   const [renderingError, setRenderingError] = useState<ErrorObject | null>(
     null,
   );
-
   const { isMobile } = useScreenSize();
-
   const [tabIndex] = useToolbarTabs();
   const { enqueueMessage } = useMessagesSnackbar();
 
@@ -229,8 +227,6 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     }
     handleOptimisticPointUpdate([...points, point]);
   }
-
-
 
   async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint) {
     if (session == null) {
@@ -339,102 +335,111 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     }
   }
 
-    function handleRemoveBasePoint(point: SegmentationPoint) {
-      if (
-        isPlaying ||
-        streamingState === 'partial' ||
-        streamingState === 'requesting'
-      ) {
-        return;
-      }
-      console.log('Removing base point', point);
-      setBasePoints(basePoints.filter(p => p !== point));
-      handleOptimisticRemoveBasePointUpdate(point);
+  function handleRemoveBasePoint(point: SegmentationPoint) {
+    if (
+      isPlaying ||
+      streamingState === 'partial' ||
+      streamingState === 'requesting'
+    ) {
+      return;
     }
-    // The interaction layer handles clicks onto the video canvas. It is used
-    // to get absolute point clicks within the video's coordinate system.
-    // The PointsLayer handles rendering of input points and allows removing
-    // individual points by clicking on them.
-    const layers = (
-      <>
-        {tabIndex === OBJECT_TOOLBAR_INDEX && (
-          <>
-            <InteractionLayer
-              key="interaction-layer"
-              onPoint={point => handleAddPoint(point)}
+    console.log('Removing base point', point);
+    setBasePoints(basePoints.filter(p => p !== point));
+    handleOptimisticRemoveBasePointUpdate(point);
+  }
+  // The interaction layer handles clicks onto the video canvas. It is used
+  // to get absolute point clicks within the video's coordinate system.
+  // The PointsLayer handles rendering of input points and allows removing
+  // individual points by clicking on them.
+  const layers = (
+    <>
+      {tabIndex === OBJECT_TOOLBAR_INDEX && (
+        <>
+          <InteractionLayer
+            key="interaction-layer"
+            onPoint={point => handleAddPoint(point)}
+          />
+          <PointsLayer
+            key="points-layer"
+            points={points}
+            onRemovePoint={handleRemovePoint}
+          />
+        </>
+      )}
+      {tabIndex === CENTERLINE_TOOLBAR_INDEX && (
+        <>
+          <InteractionLayer
+            key="basepoint-interaction-layer"
+            onPoint={point => handleAddBasePoint(point)}
+          />
+          {basePoints && (
+            <BasePointsLayer
+              key="base-points-layer"
+              points={basePoints}
+              onRemovePoint={handleRemoveBasePoint}
             />
-            <PointsLayer
-              key="points-layer"
-              points={points}
-              onRemovePoint={handleRemovePoint}
-            />
-          </>
-        )}
-        {tabIndex === CENTERLINE_TOOLBAR_INDEX && (
-          <>
-            <InteractionLayer
-              key="basepoint-interaction-layer"
-              onPoint={point => handleAddBasePoint(point)}
-            />
-            {basePoints && (
-              <BasePointsLayer
-                key="base-points-layer"
-                points={basePoints}
-                onRemovePoint={handleRemoveBasePoint}
-              />
-            )}
-          </>
-        )}
-        {!isMobile && <MessagesSnackbar key="snackbar-layer" />}
-      </>
-    );
+          )}
+        </>
+      )}
+      {!isMobile && <MessagesSnackbar key="snackbar-layer" />}
+    </>
+  );
 
-    return (
-      <>
-        {(isVideoLoading || session === null) && !isSessionStartFailed && (
-          <div {...stylex.props(styles.loadingScreenWrapper)}>
-            <LoadingStateScreen
-              title="Loading tracker..."
-              description="This may take a few moments, you're almost there!"
-            />
-          </div>
-        )}
-        {isSessionStartFailed && (
-          <div {...stylex.props(styles.loadingScreenWrapper)}>
-            <LoadingStateScreen
-              title="Did we just break the internet?"
-              description={
-                <>Uh oh, it looks like there was an issue starting a session.</>
-              }
-              linkProps={{ to: '..', label: 'Back to homepage' }}
-            />
-          </div>
-        )}
-        {isMobile && renderingError != null && (
-          <div {...stylex.props(styles.loadingScreenWrapper)}>
-            <LoadingStateScreen
-              title="Well, this is embarrassing..."
-              description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
-              linkProps={{ to: '..', label: 'Back to homepage' }}
-            />
-          </div>
-        )}
-        {uploadingState !== 'default' && (
-          <div {...stylex.props(styles.loadingScreenWrapper)}>
-            <UploadLoadingScreen />
-          </div>
-        )}
-        <div {...stylex.props(styles.container)}>
-          <VideoEditor
-            video={inputVideo}
-            layers={layers}
-            loading={session == null}>
-            <div className="bg-graydark-800 w-full">
+  return (
+    <>
+      {(isVideoLoading || session === null) && !isSessionStartFailed && (
+        <div {...stylex.props(styles.loadingScreenWrapper)}>
+          <LoadingStateScreen
+            title="Loading tracker..."
+            description="This may take a few moments, you're almost there!"
+          />
+        </div>
+      )}
+      {isSessionStartFailed && (
+        <div {...stylex.props(styles.loadingScreenWrapper)}>
+          <LoadingStateScreen
+            title="Did we just break the internet?"
+            description={
+              <>Uh oh, it looks like there was an issue starting a session.</>
+            }
+            linkProps={{ to: '..', label: 'Back to homepage' }}
+          />
+        </div>
+      )}
+      {isMobile && renderingError != null && (
+        <div {...stylex.props(styles.loadingScreenWrapper)}>
+          <LoadingStateScreen
+            title="Well, this is embarrassing..."
+            description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
+            linkProps={{ to: '..', label: 'Back to homepage' }}
+          />
+        </div>
+      )}
+      {uploadingState !== 'default' && (
+        <div {...stylex.props(styles.loadingScreenWrapper)}>
+          <UploadLoadingScreen />
+        </div>
+      )}
+      <div {...stylex.props(styles.container)}>
+        <VideoEditor
+          video={inputVideo}
+          layers={layers}
+          loading={session == null}>
+          <div className="flex w-full">
+            <div className="bg-graydark-800 w-[90%]">
               <VideoFilmstripWithPlayback />
               <TrackletsAnnotation />
             </div>
-          </VideoEditor>
-        </div>
-      </>
-    );
-  }
+            <div className="bg-graydark-800 w-[10%]">
+              <div className="flex flex-col items-center justify-start pt-8">
+                <ToggleEffectsButton />
+              </div>
+            </div>
+          </div>
+
+        </VideoEditor>
+      </div>
+    </>
+  );
+}
+

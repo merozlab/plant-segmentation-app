@@ -14,6 +14,5 @@
  * limitations under the License.
  */
 export const OBJECT_TOOLBAR_INDEX = 0;
-export const EFFECT_TOOLBAR_INDEX = 1;
-export const MORE_OPTIONS_TOOLBAR_INDEX = 2;
-export const CENTERLINE_TOOLBAR_INDEX = 3; // Add the new index
+export const DOWNLOAD_TOOLBAR_INDEX = 1;
+export const CENTERLINE_TOOLBAR_INDEX = 2;

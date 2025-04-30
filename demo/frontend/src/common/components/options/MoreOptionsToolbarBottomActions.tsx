@@ -15,11 +15,11 @@
  */
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import {
-  EFFECT_TOOLBAR_INDEX,
+  OBJECT_TOOLBAR_INDEX,
   CENTERLINE_TOOLBAR_INDEX, // Import the new index
 } from '@/common/components/toolbar/ToolbarConfig';
-import {ChevronLeft, ChevronRight} from '@carbon/icons-react'; // Import ChevronRight
-import {Button} from 'react-daisyui';
+import { ChevronLeft, ChevronRight } from '@carbon/icons-react'; // Import ChevronRight
+import { Button } from 'react-daisyui';
 import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper';
 import { useAtom } from 'jotai'; // Import useAtomValue and useAtom
 // import { sessionAtom } from '@/demo/atoms'; // Import sessionAtom
@@ -30,14 +30,12 @@ type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function MoreOptionsToolbarBottomActions({onTabChange}: Props) {
-  // const session = useAtomValue(sessionAtom); // Get the current session
+export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) {
   const [isLoading, setIsLoading] = useState(false); // Add loading state for the button
-  // const { enqueueMessage, clearMessage } = useMessagesSnackbar();
-  const [areMasksReady, ] = useAtom(masksReadyAtom); // We only need the setter here
+  const [areMasksReady,] = useAtom(masksReadyAtom); // We only need the setter here
 
-  function handleReturnToEffectsTab() {
-    onTabChange(EFFECT_TOOLBAR_INDEX);
+  function handleReturnToObjectsTab() {
+    onTabChange(OBJECT_TOOLBAR_INDEX);
   }
 
   // Make the handler async
@@ -51,8 +49,8 @@ export default function MoreOptionsToolbarBottomActions({onTabChange}: Props) {
       setIsLoading(true);
       // Wait 5 seconds and try again
       setTimeout(() => {
-      setIsLoading(false);
-      onTabChange(CENTERLINE_TOOLBAR_INDEX);
+        setIsLoading(false);
+        onTabChange(CENTERLINE_TOOLBAR_INDEX);
       }, 5000);
     }
   }
@@ -61,7 +59,7 @@ export default function MoreOptionsToolbarBottomActions({onTabChange}: Props) {
     <ToolbarBottomActionsWrapper>
       <Button
         color="ghost"
-        onClick={handleReturnToEffectsTab}
+        onClick={handleReturnToObjectsTab}
         disabled={isLoading}
         className="!px-4 !rounded-full font-medium text-white hover:bg-black"
         startIcon={<ChevronLeft />}>

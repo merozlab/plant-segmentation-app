@@ -163,7 +163,6 @@ def maskify() -> Response:
             print("original filenames", original_file_names[:10])
 
     # Collect all JSON files and sort by frame index
-
     json_files = sorted(base.glob("*.json"), key=lambda f: int(f.stem.split("_")[-1]))
     if not json_files:
         return make_response("No mask JSON files found.", 404)
@@ -197,10 +196,10 @@ def maskify() -> Response:
             if original_file_names:
                 # Use the original file name and append the object index
                 original_file_name = original_file_names[idx]
-                output_filename = f"{original_file_name}_mask.jpg"
+                output_filename = f"{original_file_name}_mask.bmp"
             else:
                 # Fallback to using the index
-                output_filename = f"{idx+1:05d}_mask.jpg"
+                output_filename = f"{idx+1:05d}_mask.bmp"
             output_path = object_dirs[obj_idx] / output_filename
             cv2.imwrite(str(output_path), bw_mask)
 

@@ -18,7 +18,7 @@ import RestartSessionButton from '@/common/components/session/RestartSessionButt
 import ToolbarBottomActionsWrapper from '@/common/components/toolbar/ToolbarBottomActionsWrapper';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import {
-  MORE_OPTIONS_TOOLBAR_INDEX,
+  DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
 import { sessionAtom } from '@/demo/atoms';
@@ -75,8 +75,8 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
         // Show success message
         // Set masks as ready
         setMasksReady(true);
-        // Navigate to More Options tab
-        onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
+        // Navigate to Download tab
+        onTabChange(DOWNLOAD_TOOLBAR_INDEX);
       }
     } catch (error) {
       // Clear the in-progress message

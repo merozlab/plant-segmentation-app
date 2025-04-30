@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 import ObjectsToolbar from '@/common/components/annotations/ObjectsToolbar';
-import EffectsToolbar from '@/common/components/effects/EffectsToolbar';
 import MoreOptionsToolbar from '@/common/components/options/MoreOptionsToolbar';
 import CenterlineToolbar from '@/common/components/centerlines/CenterlineToolbar';
-import type {CSSProperties} from 'react';
+import type { CSSProperties } from 'react';
 
 type Props = {
   tabIndex: number;
   onTabChange: (newIndex: number) => void;
 };
 
-export default function DesktopToolbar({tabIndex, onTabChange}: Props) {
+export default function DesktopToolbar({ tabIndex, onTabChange }: Props) {
   const toolbarShadow: CSSProperties = {
     boxShadow: '0px 1px 3px 1px rgba(0,0,0,.25)',
     transition: 'box-shadow 0.8s ease-out',
@@ -32,7 +31,6 @@ export default function DesktopToolbar({tabIndex, onTabChange}: Props) {
 
   const tabs = [
     <ObjectsToolbar key="objects" onTabChange={onTabChange} />,
-    <EffectsToolbar key="effects" onTabChange={onTabChange} />,
     <MoreOptionsToolbar key="options" onTabChange={onTabChange} />,
     <CenterlineToolbar key="centerlines" onTabChange={onTabChange} />,
   ];
