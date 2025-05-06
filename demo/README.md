@@ -50,7 +50,9 @@ docker compose up --build
 This will build and start both services. You can access them at:
 
 - **Frontend:** [http://localhost:7262](http://localhost:7262)
-- **Backend:** [http://localhost:7263/graphql](http://localhost:7263/graphql)
+- **Inference Backend:** [http://localhost:7263/graphql](http://localhost:7263/graphql)
+- **Video Processing Backend:** [http://localhost:7264/](http://localhost:7264/)
+
 
 ## Running Backend with MPS Support
 

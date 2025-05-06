@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from typing import Dict, List, Optional, Tuple
 from numpy.typing import ArrayLike
-import streamlit as st
 import zipfile
 from io import BytesIO
 
@@ -30,7 +29,7 @@ def plot_contour(contour):
     plt.plot(x_contour, y_contour, "b-", label="Original Contour")
     plt.legend()
     plt.axis("equal")
-    st.pyplot(plt.gcf())
+    # st.pyplot(plt.gcf())
 
 
 def distribute_points(x, y, n_points):
@@ -63,7 +62,7 @@ def plot_centerline(x, y, x_unif, y_unif, centerline):
     plt.plot(centerline[0], centerline[1], "go", label="Centerline")
     plt.legend()
     plt.axis("equal")
-    st.pyplot(plt.gcf())
+    # st.pyplot(plt.gcf())
 
 
 def find_closest_point(contour, point):
@@ -81,7 +80,7 @@ def display_centerlines(centerlines):
     plt.xlabel("x")
     plt.ylabel("y")
     plt.axis("equal")
-    st.pyplot(plt.gcf())
+    # st.pyplot(plt.gcf())
 
 
 def display_angles(avg_angles, std_angles):
@@ -103,7 +102,7 @@ def display_angles(avg_angles, std_angles):
     y_ticks = np.arange(0, np.pi + np.pi / 4, np.pi / 4)
     y_labels = [f"${tick/np.pi}\\pi$" if tick != 0 else "0" for tick in y_ticks]
     plt.yticks(y_ticks, y_labels)
-    st.pyplot(plt.gcf())
+    # st.pyplot(plt.gcf())
 
 
 def get_arclength(centerlines, display=False):
@@ -120,7 +119,7 @@ def get_arclength(centerlines, display=False):
         plt.title("Arclength of Centerlines")
         plt.xlabel("Time")
         plt.ylabel("Arclength")
-        st.pyplot(plt.gcf())
+        # st.pyplot(plt.gcf())
     return arclengths
 
 

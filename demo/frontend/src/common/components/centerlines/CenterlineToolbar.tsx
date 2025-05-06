@@ -26,7 +26,6 @@ import {
 import { trackletObjectsAtom, activeTrackletObjectIdAtom, sessionAtom, frameIndexAtom } from '@/demo/atoms';
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { useEffect } from 'react';
-// import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';

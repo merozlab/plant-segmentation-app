@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ClearAllPointsInVideoButton from '@/common/components/annotations/ClearAllPointsInVideoButton';
+// import ClearAllPointsInVideoButton from '@/common/components/annotations/ClearAllPointsInVideoButton';
+import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import CloseSessionButton from '@/common/components/annotations/CloseSessionButton';
 import TrackAndPlayButton from '@/common/components/button/TrackAndPlayButton';
 import ToolbarBottomActionsWrapper from '@/common/components/toolbar/ToolbarBottomActionsWrapper';
@@ -94,8 +95,11 @@ export default function ObjectsToolbarBottomActions({ onTabChange }: Props) {
 
   return (
     <ToolbarBottomActionsWrapper>
-      <ClearAllPointsInVideoButton
+      {/* <ClearAllPointsInVideoButton
         onRestart={() => onTabChange(OBJECT_TOOLBAR_INDEX)}
+      /> */}
+      <RestartSessionButton
+        onRestartSession={() => onTabChange(OBJECT_TOOLBAR_INDEX)}
       />
       {isTrackingEnabled && <TrackAndPlayButton />}
       {streamingState === 'full' && (

@@ -19,7 +19,7 @@ import useVideo from '@/common/components/video/editor/useVideo';
 import { isPlayingAtom, streamingStateAtom } from '@/demo/atoms'; // toolbarTabIndex
 import { PauseFilled, PlayFilledAlt } from '@carbon/icons-react';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 
 export default function PlaybackButton() {
   // const tabIndex = useAtomValue(toolbarTabIndex);
@@ -53,24 +53,8 @@ export default function PlaybackButton() {
     }
   }, [isDisabled, isPlaying, handlePlay, handlePause]);
 
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      const callback = {
-        KeyK: handleClick,
-      }[event.code];
-      if (callback != null) {
-        event.preventDefault();
-        callback();
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [handleClick]);
-
   return (
-    <Tooltip message={`${isPlaying ? 'Pause' : 'Play'} (k)`}>
+    <Tooltip message={`${isPlaying ? 'Pause' : 'Play'}`}>
       <button
         disabled={isDisabled}
         className={`group !rounded-full !w-10 !h-10 flex items-center justify-center ${getButtonStyles(isDisabled)}`}

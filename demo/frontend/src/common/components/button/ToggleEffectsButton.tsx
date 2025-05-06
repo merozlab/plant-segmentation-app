@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import Tooltip from '@/common/components/Tooltip';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
 import useVideoEffect from '@/common/components/video/editor/useVideoEffect';
 import { EffectIndex } from '@/common/components/video/effects/Effects';
@@ -55,22 +55,6 @@ export default function ToggleEffectsButton() {
         // Update the mode state
         setEffectMode(nextMode);
     }, [setEffect, effectMode]);
-
-    useEffect(() => {
-        const handleKey = (event: KeyboardEvent) => {
-            const callback = {
-                KeyE: toggleEffects,
-            }[event.code];
-            if (callback != null) {
-                event.preventDefault();
-                callback();
-            }
-        };
-        document.addEventListener('keydown', handleKey);
-        return () => {
-            document.removeEventListener('keydown', handleKey);
-        };
-    }, [toggleEffects]);
 
     return (
         <Tooltip message="Toggle Effects">

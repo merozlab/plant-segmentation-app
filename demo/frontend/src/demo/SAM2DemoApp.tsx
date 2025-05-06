@@ -22,13 +22,13 @@ import RootLayout from '@/layouts/RootLayout';
 import SAM2DemoPage from '@/routes/DemoPageWrapper';
 import PageNotFoundPage from '@/routes/PageNotFoundPage';
 import useSettingsContext from '@/settings/useSettingsContext';
-import {Route, Routes} from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 
 export default function DemoAppWrapper() {
-  const {settings} = useSettingsContext();
+  const { settings } = useSettingsContext();
   return (
     <RelayEnvironmentProvider
-      endpoint={settings.videoAPIEndpoint}
+      endpoint={settings.inferenceAPIEndpoint}
       suspenseFallback={<DemoSuspenseFallback />}
       errorFallback={DemoErrorFallback}>
       <DemoApp />

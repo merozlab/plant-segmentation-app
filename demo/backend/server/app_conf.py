@@ -25,6 +25,7 @@ logger.info(f"local deployment mode: {IS_LOCAL_DEPLOYMENT}")
 FFMPEG_NUM_THREADS = int(os.getenv("FFMPEG_NUM_THREADS", "1"))
 
 # Path for all data used in API
+# i guess this is where you would configure s3
 DATA_PATH = Path(os.getenv("DATA_PATH", "/data"))
 
 # Max duration an uploaded video can have in seconds. The default is 10
