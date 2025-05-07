@@ -60,7 +60,7 @@ export default function ToggleEffectsButton() {
         <Tooltip message="Toggle Effects">
             <button
                 disabled={isDisabled}
-                className={`group !rounded-full !w-10 !h-10 flex items-center justify-center ${isDisabled
+                className={`group !rounded-full !w-8 !h-8 flex items-center justify-center ${isDisabled
                     ? '!bg-gray-400 !text-graydark-700 cursor-not-allowed'
                     : effectMode === 0
                         ? 'bg-white text-green-700 hover:bg-green-200'
