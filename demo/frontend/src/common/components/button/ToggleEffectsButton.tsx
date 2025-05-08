@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import Tooltip from '@/common/components/Tooltip';
+import ActionButton from '@/common/components/button/ActionButton'; // Updated import
 import { useCallback, useState } from 'react';
 import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
 import useVideoEffect from '@/common/components/video/editor/useVideoEffect';
@@ -57,31 +57,12 @@ export default function ToggleEffectsButton() {
     }, [setEffect, effectMode]);
 
     return (
-        <Tooltip message="Toggle Effects">
-            <button
-                disabled={isDisabled}
-                className={`group !rounded-full !w-8 !h-8 flex items-center justify-center ${isDisabled
-                    ? '!bg-gray-400 !text-graydark-700 cursor-not-allowed'
-                    : effectMode === 0
-                        ? 'bg-white text-green-700 hover:bg-green-200'
-                        : effectMode === 1
-                            ? 'bg-white text-black hover:bg-gray-200'
-                            : 'bg-white text-blue-700 hover:bg-blue-200'
-                    }`}
-                onClick={toggleEffects}>
-                <WatsonHealth3DMprToggle
-                    size={18}
-                    className={
-                        isDisabled
-                            ? 'text-graydark-600'
-                            : effectMode === 0
-                                ? 'text-gray-800 group-hover:text-gray-900'
-                                : effectMode === 1
-                                    ? 'text-black group-hover:text-green-700'
-                                    : 'text-blue-700 group-hover:text-blue-900'
-                    }
-                />
-            </button>
-        </Tooltip>
+        <ActionButton
+            message="Toggle Effects"
+            onClick={toggleEffects}
+            isDisabled={isDisabled}
+            icon={WatsonHealth3DMprToggle}
+            activeState={effectMode} // Pass effectMode to control styling
+        />
     );
 }

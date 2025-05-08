@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {BaseTracklet, SegmentationPoint} from '@/common/tracker/Tracker';
-import {TrackerOptions, Trackers} from '@/common/tracker/Trackers';
-import {PauseFilled, PlayFilledAlt} from '@carbon/icons-react';
-import stylex, {StyleXStyles} from '@stylexjs/stylex';
+import { BaseTracklet, SegmentationPoint } from '@/common/tracker/Tracker';
+import { TrackerOptions, Trackers } from '@/common/tracker/Trackers';
+import { PauseFilled, PlayFilledAlt } from '@carbon/icons-react';
+import stylex, { StyleXStyles } from '@stylexjs/stylex';
 import {
   CSSProperties,
   forwardRef,
@@ -25,21 +25,21 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import {Button} from 'react-daisyui';
+import { Button } from 'react-daisyui';
 
-import {EffectIndex, Effects} from '@/common/components/video/effects/Effects';
+import { EffectIndex, Effects } from '@/common/components/video/effects/Effects';
 import useReportError from '@/common/error/useReportError';
 import Logger from '@/common/logger/Logger';
-import {isPlayingAtom, isVideoLoadingAtom} from '@/demo/atoms';
-import {color} from '@/theme/tokens.stylex';
-import {useAtom} from 'jotai';
+import { isPlayingAtom, isVideoLoadingAtom } from '@/demo/atoms';
+import { color } from '@/theme/tokens.stylex';
+import { useAtom } from 'jotai';
 import useResizeObserver from 'use-resize-observer';
 import VideoLoadingOverlay from './VideoLoadingOverlay';
 import {
   StreamingStateUpdateEvent,
   VideoWorkerEventMap,
 } from './VideoWorkerBridge';
-import {EffectOptions} from './effects/Effect';
+import { EffectOptions } from './effects/Effect';
 import useVideoWorker from './useVideoWorker';
 
 const styles = stylex.create({
@@ -155,7 +155,9 @@ export default forwardRef<VideoRef, Props>(function Video(
 
   const canvasHeight = useMemo(() => {
     const resizeRatio = resizeWidth / width;
-    return Math.min(height * resizeRatio, resizeHeight);
+    const calculatedHeight = Math.min(height * resizeRatio, resizeHeight);
+    console.log('Video resize dimensions:', { resizeWidth, resizeHeight, calculatedHeight });
+    return calculatedHeight > 1 ? calculatedHeight : 400; // Ensure a minimum height of 400px
   }, [resizeWidth, height, width, resizeHeight]);
 
   useImperativeHandle(
@@ -332,6 +334,7 @@ export default forwardRef<VideoRef, Props>(function Video(
     <div
       {...stylex.props(containerStyle ?? styles.container)}
       ref={resizeObserverRef}>
+
       <div {...stylex.props(styles.canvasContainer)}>
         {(isVideoLoading || loading) && <VideoLoadingOverlay />}
         <canvas
@@ -341,7 +344,7 @@ export default forwardRef<VideoRef, Props>(function Video(
           width={width}
           height={height}
           style={{
-            height: canvasHeight,
+            height: canvasHeight > 1 ? canvasHeight : '400px', // Fallback to 400px if canvasHeight is too small
           }}
         />
       </div>

@@ -1,5 +1,11 @@
 /**
- * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * Copyrighimport { VideoData } from '@/demo/atoms';
+import stylex, { StyleXStyles } from '@stylexjs/stylex';
+import { useSetAtom } from 'jotai';
+import React, { PropsWithChildren, RefObject, useEffect, useRef } from 'react';
+import Video, { VideoRef } from '../Video';
+import { videoAtom } from './atoms';
+import { TransformComponent } from 'react-zoom-pan-pinch';eta Platforms, Inc. and affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +19,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {VideoData} from '@/demo/atoms';
-import stylex, {StyleXStyles} from '@stylexjs/stylex';
-import {useSetAtom} from 'jotai';
-import {PropsWithChildren, RefObject, useEffect, useRef} from 'react';
-import Video, {VideoRef} from '../Video';
-import {videoAtom} from './atoms';
+import { VideoData } from '@/demo/atoms';
+import stylex, { StyleXStyles } from '@stylexjs/stylex';
+import { useSetAtom } from 'jotai';
+import React, { PropsWithChildren, RefObject, useEffect, useRef } from 'react';
+import Video, { VideoRef } from '../Video';
+import { videoAtom } from './atoms';
+import { TransformComponent } from 'react-zoom-pan-pinch';
 
 const MAX_VIDEO_WIDTH = 1280;
 
@@ -42,6 +49,7 @@ const styles = stylex.create({
     overflow: 'hidden',
     width: '100%',
     maxWidth: MAX_VIDEO_WIDTH,
+    height: '500px', // Fixed height to ensure the container is visible
   },
   layers: {
     position: 'absolute',
@@ -104,14 +112,25 @@ export default function VideoEditor({
   return (
     <div {...stylex.props(styles.editorContainer)}>
       <div {...stylex.props(styles.videoContainer)}>
-        <Video
-          ref={videoRef}
-          src={inputVideo.url}
-          width={inputVideo.width}
-          height={inputVideo.height}
-          loading={loading}
-        />
-        <div {...stylex.props(styles.layers)}>{layers}</div>
+        <TransformComponent
+          wrapperStyle={{
+            width: '100%',
+            height: '100%'
+          }}
+          contentStyle={{
+            width: '100%',
+            height: '100%'
+          }}
+        >
+          <Video
+            ref={videoRef}
+            src={inputVideo.url}
+            width={inputVideo.width}
+            height={inputVideo.height}
+            loading={loading}
+          />
+          <div {...stylex.props(styles.layers)}>{layers}</div>
+        </TransformComponent>
       </div>
       {children}
     </div>

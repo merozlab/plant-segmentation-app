@@ -35,8 +35,14 @@ import { BasePointsLayer } from '@/common/components/video/layers/BasePointsLaye
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
 import useScreenSize from '@/common/screen/useScreenSize';
-import { SegmentationPoint } from '@/common/tracker/Tracker';
 import ToggleEffectsButton from '@/common/components/button/ToggleEffectsButton';
+import ActionButton from '@/common/components/button/ActionButton';
+import { ZoomIn, ZoomOut, Reset } from '@carbon/icons-react';
+import { SegmentationPoint } from '@/common/tracker/Tracker';
+import { type ErrorObject } from 'serialize-error';
+// import { TransformWrapper, useTransformEffect } from "react-zoom-pan-pinch";
+import { TransformWrapper } from 'react-zoom-pan-pinch';
+import React from "react";
 
 import {
   activeTrackletObjectIdAtom,
@@ -56,8 +62,7 @@ import useSettingsContext from '@/settings/useSettingsContext';
 import { color, spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, useState } from 'react';
-import type { ErrorObject } from 'serialize-error';
+import { useState, useEffect } from 'react';
 
 
 const styles = stylex.create({
@@ -66,6 +71,7 @@ const styles = stylex.create({
     flexDirection: 'column',
     overflow: 'auto',
     width: '100%',
+    height: '100%', // Ensure this container has full height
     borderColor: color['gray-800'],
     backgroundColor: color['gray-800'],
     borderWidth: 8,
@@ -351,6 +357,9 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   // to get absolute point clicks within the video's coordinate system.
   // The PointsLayer handles rendering of input points and allows removing
   // individual points by clicking on them.
+
+
+
   const layers = (
     <>
       {tabIndex === OBJECT_TOOLBAR_INDEX && (
@@ -421,23 +430,60 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
         </div>
       )}
       <div {...stylex.props(styles.container)}>
-        <VideoEditor
-          video={inputVideo}
-          layers={layers}
-          loading={session == null}>
-          <div className="flex w-full">
-            <div className="bg-graydark-800 w-[90%]">
-              <VideoFilmstripWithPlayback />
-              <TrackletsAnnotation />
-            </div>
-            <div className="bg-graydark-800 w-[10%]">
-              <div className="flex flex-col items-center justify-start pt-8">
-                <ToggleEffectsButton />
-              </div>
-            </div>
-          </div>
-
-        </VideoEditor>
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.5}
+          maxScale={3}
+        >
+          {({ zoomIn, zoomOut, resetTransform }) => (
+            <React.Fragment>
+              <VideoEditor
+                video={inputVideo}
+                layers={layers}
+                loading={session == null}
+              >
+                {/* This div contains the filmstrip/annotations AND the buttons column */}
+                <div className="flex w-full">
+                  {/* This div is the main content area that should be zoomable/pannable via VideoEditor's internal TransformComponent */}
+                  <div className="bg-graydark-800 w-[90%]">
+                    <VideoFilmstripWithPlayback />
+                    <TrackletsAnnotation />
+                  </div>
+                  {/* This div is for controls and should NOT be part of the TransformComponent's content in VideoEditor */}
+                  <div className="bg-graydark-800 w-[10%]">
+                    <div className="flex flex-col items-center justify-start pt-8">
+                      <ToggleEffectsButton />
+                      <div className="mt-2">
+                        <ActionButton
+                          message="Zoom In"
+                          onClick={() => zoomIn()}
+                          isDisabled={false}
+                          icon={ZoomIn}
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <ActionButton
+                          message="Zoom Out"
+                          onClick={() => zoomOut()}
+                          isDisabled={false}
+                          icon={ZoomOut}
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <ActionButton
+                          message="Reset"
+                          onClick={() => resetTransform()}
+                          isDisabled={false}
+                          icon={Reset}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </VideoEditor>
+            </React.Fragment>
+          )}
+        </TransformWrapper>
       </div>
     </>
   );
