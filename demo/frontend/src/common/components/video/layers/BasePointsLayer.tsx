@@ -15,12 +15,13 @@
  */
 import { SegmentationPoint } from '@/common/tracker/Tracker';
 import stylex from '@stylexjs/stylex';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import useResizeObserver from 'use-resize-observer';
 import useVideo from '../editor/useVideo';
 import { useAtomValue } from 'jotai';
 import { activeTrackletObjectIdAtom, trackletObjectsAtom } from '@/demo/atoms';
 import React from 'react';
+import { useTransformContext } from 'react-zoom-pan-pinch';
 
 const styles = stylex.create({
   container: {
@@ -39,6 +40,7 @@ type Props = {
 export function BasePointsLayer({ points, onRemovePoint }: Props) {
   const video = useVideo();
   const videoCanvas = useMemo(() => video?.getCanvas(), [video]);
+  const [forceUpdateCounter, setForceUpdateCounter] = useState(0);
 
   // Get active tracklet ID and all tracklets
   const activeTrackletId = useAtomValue(activeTrackletObjectIdAtom);
@@ -50,21 +52,96 @@ export function BasePointsLayer({ points, onRemovePoint }: Props) {
     height: containerHeight = 1,
   } = useResizeObserver<SVGElement>();
 
+  // Get the transform context for zoom state
   const canvasWidth = videoCanvas?.width ?? 1;
   const canvasHeight = videoCanvas?.height ?? 1;
+
+  // Get transform context for zoom state
+  const transformContext = useTransformContext();
+  const { scale = 1 } = transformContext.transformState;
+
+  // Subscribe to transform events to force immediate updates
+  useEffect(() => {
+    // Custom event name for zoom changes
+    const ZOOM_EVENT = 'react-zoom-pan-pinch-zoom-update';
+
+    // Handle any zoom or pan change
+    const handleTransformChange = () => {
+      console.log('BasePointsLayer: Transform changed, forcing update');
+      // Force component re-render
+      setForceUpdateCounter(prev => prev + 1);
+    };
+
+    // Create a MutationObserver to watch for transform attribute changes
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' &&
+          (mutation.attributeName === 'style' || mutation.attributeName === 'transform')) {
+          handleTransformChange();
+        }
+      }
+    });
+
+    // Find the transform element
+    const transformElement = document.querySelector('.react-transform-component');
+    if (transformElement) {
+      // Observe style and transform attribute changes
+      observer.observe(transformElement, {
+        attributes: true,
+        attributeFilter: ['style', 'transform']
+      });
+
+      // Also listen for wheel events directly
+      transformElement.addEventListener('wheel', handleTransformChange);
+      transformElement.addEventListener('touchmove', handleTransformChange);
+      // Additional event listeners for buttons
+      document.addEventListener(ZOOM_EVENT, handleTransformChange);
+    }
+
+    return () => {
+      // Clean up all observers and listeners
+      observer.disconnect();
+
+      if (transformElement) {
+        transformElement.removeEventListener('wheel', handleTransformChange);
+        transformElement.removeEventListener('touchmove', handleTransformChange);
+      }
+
+      document.removeEventListener(ZOOM_EVENT, handleTransformChange);
+    };
+  }, []);
 
   const sizeMultiplier = useMemo(() => {
     const widthMultiplier = canvasWidth / containerWidth;
     const heightMultiplier = canvasHeight / containerHeight;
 
     return Math.max(widthMultiplier, heightMultiplier);
-  }, [canvasWidth, canvasHeight, containerWidth, containerHeight]);
+  }, [canvasWidth, canvasHeight, containerWidth, containerHeight]);  // This useEffect will run whenever forceUpdateCounter changes
+  // It doesn't need to do anything - just the re-render is enough
+  useEffect(() => {
+    console.log(`BasePointsLayer forcing update #${forceUpdateCounter}, scale: ${scale}`);
+  }, [forceUpdateCounter, scale]);
 
-  const pointRadius = useMemo(() => 4 * sizeMultiplier, [sizeMultiplier]);
+  // Adjust sizes based on zoom level (scale)
+  const pointRadius = useMemo(() => {
+    const baseSize = 4;
+    const adjustedSize = baseSize / scale;
+    console.log(`BasePointsLayer calculating pointRadius: ${adjustedSize} * ${sizeMultiplier} = ${adjustedSize * sizeMultiplier}`);
+    return adjustedSize * sizeMultiplier;
+  }, [scale, sizeMultiplier, forceUpdateCounter]); // Add forceUpdateCounter to force recalculation
 
   // Define stroke widths - regular for normal points, larger for active tracklet points
-  const regularStrokeWidth = useMemo(() => 2 * sizeMultiplier, [sizeMultiplier]);
-  const activeStrokeWidth = useMemo(() => 4 * sizeMultiplier, [sizeMultiplier]);
+  const regularStrokeWidth = useMemo(() => {
+    const baseSize = 2;
+    const adjustedSize = baseSize / scale;
+    return adjustedSize * sizeMultiplier;
+  }, [scale, sizeMultiplier, forceUpdateCounter]); // Add forceUpdateCounter to force recalculation
+
+  const activeStrokeWidth = useMemo(() => {
+    const baseSize = 4;
+    const adjustedSize = baseSize / scale;
+    return adjustedSize * sizeMultiplier;
+  }, [scale, sizeMultiplier, forceUpdateCounter]); // Add forceUpdateCounter to force recalculation
 
   return (
     <svg

@@ -456,7 +456,11 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
                       <div className="mt-2">
                         <ActionButton
                           message="Zoom In"
-                          onClick={() => zoomIn()}
+                          onClick={() => {
+                            zoomIn();
+                            // Dispatch custom event to notify point layers
+                            document.dispatchEvent(new CustomEvent('react-zoom-pan-pinch-zoom-update'));
+                          }}
                           isDisabled={false}
                           icon={ZoomIn}
                         />
@@ -464,7 +468,11 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
                       <div className="mt-2">
                         <ActionButton
                           message="Zoom Out"
-                          onClick={() => zoomOut()}
+                          onClick={() => {
+                            zoomOut();
+                            // Dispatch custom event to notify point layers
+                            document.dispatchEvent(new CustomEvent('react-zoom-pan-pinch-zoom-update'));
+                          }}
                           isDisabled={false}
                           icon={ZoomOut}
                         />
@@ -472,7 +480,11 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
                       <div className="mt-2">
                         <ActionButton
                           message="Reset"
-                          onClick={() => resetTransform()}
+                          onClick={() => {
+                            resetTransform();
+                            // Dispatch custom event to notify point layers
+                            document.dispatchEvent(new CustomEvent('react-zoom-pan-pinch-zoom-update'));
+                          }}
                           isDisabled={false}
                           icon={Reset}
                         />

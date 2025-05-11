@@ -50,18 +50,6 @@ export default function InteractionLayer({ onPoint }: Props) {
   // Update our ref whenever the transform state changes
   useEffect(() => {
     latestTransformState.current = transformContext.transformState;
-    console.log("Transform state updated:", transformContext.transformState);
-
-    // Validate that we have the expected properties
-    const { scale, positionX, positionY } = transformContext.transformState;
-    console.log("Checking transform properties:", {
-      hasScale: scale !== undefined,
-      hasPositionX: positionX !== undefined,
-      hasPositionY: positionY !== undefined,
-      scale,
-      positionX,
-      positionY
-    });
   }, [transformContext.transformState]);
 
   // Handler function for clicks
@@ -80,8 +68,6 @@ export default function InteractionLayer({ onPoint }: Props) {
     const scale = currentTransform.scale || refTransform.scale;
     const positionX = currentTransform.positionX || refTransform.positionX;
     const positionY = currentTransform.positionY || refTransform.positionY;
-
-    console.log("Using transform:", { scale, positionX, positionY });
 
     const point = getPointInImage(event, canvas, false, {
       transformScale: scale,

@@ -221,18 +221,26 @@ export function getPointInImage(
   } = { transformScale: 1, translateX: 0, translateY: 0 },
 ): [x: number, y: number] {
   const rect = canvas.getBoundingClientRect();
-  console.log('event', event.clientX, event.clientY);
-  console.log('rect', rect);
-  console.log('canvas', canvas);
-  console.log('transformState', transformState);
+
   function transformation(
     x: number,
     y: number,
   ) {
-    return [
-      (x - 2 * transformState.translateX) / transformState.transformScale,
-      (y - transformState.translateY) / transformState.transformScale,
-    ];
+    // Calculate transformed coordinates based on zoom and pan
+    const transformedX = (x - 2 * transformState.translateX) / transformState.transformScale;
+    const transformedY = (y - transformState.translateY) / transformState.transformScale;
+
+    console.log('Transformation calculation:', {
+      origX: x,
+      origY: y,
+      transformedX,
+      transformedY,
+      transformScale: transformState.transformScale,
+      translateX: transformState.translateX,
+      translateY: transformState.translateY
+    });
+
+    return [transformedX, transformedY];
   }
   const matrix = new DOMMatrix();
   // First, center the image
@@ -252,10 +260,7 @@ export function getPointInImage(
     canvas.clientHeight / canvas.height,
   );
   matrix.scaleSelf(scale, scale, 1, imageCenter.x, imageCenter.y);
-  console.log('scale', scale);
   const [origX, origY] = transformation(event.clientX, event.clientY);
-  console.log('origX', origX);
-  console.log('origY', origY);
 
   const [rectLeft, rectTop] = transformation(
     rect.left,
@@ -265,11 +270,21 @@ export function getPointInImage(
     origX - rectLeft,
     origY - rectTop,
   );
-  console.log('point', point);
   const imagePoint = matrix.inverse().transformPoint(point);
-  console.log('imagePoint', imagePoint);
   const x = Math.max(Math.min(imagePoint.x, canvas.width), 0);
   const y = Math.max(Math.min(imagePoint.y, canvas.height), 0);
+
+  // Log the final calculated coordinates
+  console.log('Final point calculations:', {
+    x,
+    y,
+    normalized,
+    originalEvent: {
+      clientX: event.clientX,
+      clientY: event.clientY
+    },
+    transformState
+  });
 
   if (normalized) {
     return [x / canvas.width, y / canvas.height];
