@@ -24,7 +24,7 @@ import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react'; // Import state to handle button loading state
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom'; // Import our mask readiness state
-import { sessionAtom, trackletObjectsAtom, centerlinesAtom } from '@/demo/atoms';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom } from '@/demo/atoms';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 
 type Props = {
@@ -37,6 +37,7 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
   const session = useAtomValue(sessionAtom);
   const [trackletObjects] = useAtom(trackletObjectsAtom);
   const setCenterlinesMap = useSetAtom(centerlinesAtom);
+  const originalFilePath = useAtomValue(originalFilePathAtom);
 
   function handleReturnToObjectsTab() {
     onTabChange(OBJECT_TOOLBAR_INDEX);
@@ -55,7 +56,7 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
         const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: session.id }),
+          body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath }),
         });
         if (!resp.ok) throw new Error(resp.statusText);
         const data: Record<string, [number[], number[]][]> = await resp.json();

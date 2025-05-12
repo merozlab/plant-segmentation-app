@@ -229,17 +229,6 @@ export function getPointInImage(
     // Calculate transformed coordinates based on zoom and pan
     const transformedX = (x - 2 * transformState.translateX) / transformState.transformScale;
     const transformedY = (y - transformState.translateY) / transformState.transformScale;
-
-    console.log('Transformation calculation:', {
-      origX: x,
-      origY: y,
-      transformedX,
-      transformedY,
-      transformScale: transformState.transformScale,
-      translateX: transformState.translateX,
-      translateY: transformState.translateY
-    });
-
     return [transformedX, transformedY];
   }
   const matrix = new DOMMatrix();
@@ -273,18 +262,6 @@ export function getPointInImage(
   const imagePoint = matrix.inverse().transformPoint(point);
   const x = Math.max(Math.min(imagePoint.x, canvas.width), 0);
   const y = Math.max(Math.min(imagePoint.y, canvas.height), 0);
-
-  // Log the final calculated coordinates
-  console.log('Final point calculations:', {
-    x,
-    y,
-    normalized,
-    originalEvent: {
-      clientX: event.clientX,
-      clientY: event.clientY
-    },
-    transformState
-  });
 
   if (normalized) {
     return [x / canvas.width, y / canvas.height];

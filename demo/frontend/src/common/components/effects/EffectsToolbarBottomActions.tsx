@@ -61,7 +61,7 @@ export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
           'Content-Type': 'application/json',
         },
         // Send zip: false as we only need the server to generate masks, not zip them for download yet
-        body: JSON.stringify({ session_id: session.id, original_file_path: originalFilePath }),
+        body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath }),
       });
 
       if (!response.ok) {

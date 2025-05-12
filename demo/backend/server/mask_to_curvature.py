@@ -189,16 +189,18 @@ def get_tip_angles(centerlines, display=False):
 
 
 def centerlines_to_df(
-    centerlines: Dict[str, List[ArrayLike]],
+    centerlines: Dict[str, List[ArrayLike]], frame_names: Optional[List[str]] = None
 ) -> Dict[str, pd.DataFrame]:
     d = {object: [] for object in centerlines.keys()}
     for object, object_centerlines in centerlines.items():
         l = []
-        for i, t in enumerate(object_centerlines):
+        if not frame_names:
+            frame_names = [i for i in range(len(object_centerlines))]
+        for frame, t in zip(frame_names, object_centerlines):
             l.append(
                 pd.DataFrame(
                     {
-                        "frame": i,
+                        "frame": frame,
                         "x": t[0],
                         "y": t[1],
                     }

@@ -40,7 +40,7 @@ export default function UploadLoadingScreen() {
   return (
     <LoadingStateScreen
       title="Processing..."
-      description="Sit tight while we process your file. This may take a moment."
+      description="Sit tight while we process your video. This may take a moment."
     />
   );
 }

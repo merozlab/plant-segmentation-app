@@ -46,6 +46,9 @@ export interface MessagesEventMap {
   selectNextBasePoint: MessageEvent;
   allBasePointsSet: MessageEvent;
   basepointsError: MessageEvent;
+  // download success and error for centerlines CSV
+  centerlineDownloadSuccess: MessageEvent;
+  centerlineDownloadError: MessageEvent;
 }
 
 export const defaultMessageMap: MessagesEventMap = {
@@ -103,6 +106,18 @@ export const defaultMessageMap: MessagesEventMap = {
     text: '❌ Failed to generate masks. Please try again.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: true },
+  },
+  // Show when centerlines CSV zip has downloaded successfully
+  centerlineDownloadSuccess: {
+    text: '✅ Centerlines CSV downloaded successfully.',
+    shown: false,
+    options: { type: 'info', expire: true, duration: 5000, repeat: false },
+  },
+  // Show when centerlines CSV zip download fails
+  centerlineDownloadError: {
+    text: '❌ Failed to download centerlines CSV.',
+    shown: false,
+    options: { type: 'warning', expire: true, duration: 7000, repeat: false },
   },
   noActiveSession: {
     text: '❌ No active session found. Please try again.',

@@ -75,14 +75,6 @@ export default function InteractionLayer({ onPoint }: Props) {
       translateY: positionY,
     });
 
-    console.log(`${isRightClick ? 'Right-click' : 'Click'} coordinates:`, {
-      x: point[0],
-      y: point[1],
-      type: isRightClick ?
-        (labelType === 'positive' ? 'negative' : 'positive') :
-        (labelType === 'positive' ? 'positive' : 'negative')
-    });
-
     onPoint([point[0], point[1], isRightClick ?
       (labelType === 'positive' ? 0 : 1) :
       (labelType === 'positive' ? 1 : 0)]);

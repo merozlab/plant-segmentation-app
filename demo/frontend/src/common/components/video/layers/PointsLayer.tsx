@@ -52,7 +52,6 @@ export function PointsLayer({ points, onRemovePoint }: Props) {
   // Update our ref whenever the transform state changes
   useEffect(() => {
     latestTransformState.current = transformContext.transformState;
-    console.log('PointsLayer transform state updated:', transformContext.transformState);
   }, [transformContext.transformState]);
 
   // Get the transform state directly from context
@@ -66,7 +65,6 @@ export function PointsLayer({ points, onRemovePoint }: Props) {
 
     // Handle any zoom or pan change
     const handleTransformChange = () => {
-      console.log('Transform changed, forcing update');
       // Force component re-render
       setForceUpdateCounter(prev => prev + 1);
     };
@@ -111,7 +109,6 @@ export function PointsLayer({ points, onRemovePoint }: Props) {
     };
   }, []);
 
-  console.log('Current scale in PointsLayer:', scale);
   const canvasWidth = videoCanvas?.width ?? 1;
   const canvasHeight = videoCanvas?.height ?? 1;
 
@@ -123,7 +120,6 @@ export function PointsLayer({ points, onRemovePoint }: Props) {
   }, [canvasWidth, canvasHeight, containerWidth, containerHeight]);  // This useEffect will run whenever forceUpdateCounter changes
   // It doesn't need to do anything - just the re-render is enough
   useEffect(() => {
-    console.log(`PointsLayer forcing update #${forceUpdateCounter}, scale: ${scale}`);
   }, [forceUpdateCounter, scale]);
 
   // Adjust point size based on the current zoom level
@@ -132,7 +128,6 @@ export function PointsLayer({ points, onRemovePoint }: Props) {
   const pointRadius = useMemo(() => {
     const baseSize = 8;
     const adjustedSize = baseSize / scale;
-    console.log(`Calculating pointRadius: ${adjustedSize} * ${sizeMultiplier} = ${adjustedSize * sizeMultiplier}`);
     return adjustedSize * sizeMultiplier;
   }, [scale, sizeMultiplier, forceUpdateCounter]); // Add forceUpdateCounter to force recalculation
 

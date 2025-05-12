@@ -60,13 +60,14 @@ export default function ObjectsToolbarBottomActions({ onTabChange }: Props) {
 
     try {
       // Call the /maskify endpoint asynchronously
+      console.log('originalFilePath', originalFilePath);
       const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         // Send zip: false as we only need the server to generate masks, not zip them for download yet
-        body: JSON.stringify({ session_id: session.id, original_file_path: originalFilePath }),
+        body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath }),
       });
 
       if (!response.ok) {

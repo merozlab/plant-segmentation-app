@@ -67,7 +67,6 @@ export function BasePointsLayer({ points, onRemovePoint }: Props) {
 
     // Handle any zoom or pan change
     const handleTransformChange = () => {
-      console.log('BasePointsLayer: Transform changed, forcing update');
       // Force component re-render
       setForceUpdateCounter(prev => prev + 1);
     };
@@ -119,14 +118,12 @@ export function BasePointsLayer({ points, onRemovePoint }: Props) {
   }, [canvasWidth, canvasHeight, containerWidth, containerHeight]);  // This useEffect will run whenever forceUpdateCounter changes
   // It doesn't need to do anything - just the re-render is enough
   useEffect(() => {
-    console.log(`BasePointsLayer forcing update #${forceUpdateCounter}, scale: ${scale}`);
   }, [forceUpdateCounter, scale]);
 
   // Adjust sizes based on zoom level (scale)
   const pointRadius = useMemo(() => {
     const baseSize = 4;
     const adjustedSize = baseSize / scale;
-    console.log(`BasePointsLayer calculating pointRadius: ${adjustedSize} * ${sizeMultiplier} = ${adjustedSize * sizeMultiplier}`);
     return adjustedSize * sizeMultiplier;
   }, [scale, sizeMultiplier, forceUpdateCounter]); // Add forceUpdateCounter to force recalculation
 
@@ -165,10 +162,7 @@ export function BasePointsLayer({ points, onRemovePoint }: Props) {
         // Check if this point belongs to the active tracklet
         // For BasePointsLayer, we compare coordinates with the basePoint of each tracklet
         let isActiveTrackletPoint = false;
-        console.log('Active tracklet ID:', activeTrackletId);
-        console.log('Tracklets:', tracklets);
-        console.log('Point:', point);
-        console.log('BasePoint:', tracklets.map(tracklet => tracklet.basePoint));
+
         // Find tracklet with matching basePoint
         for (const tracklet of tracklets) {
           if (tracklet.id === activeTrackletId && tracklet.basePoint && tracklet.basePoint.length > 0) {
@@ -194,7 +188,6 @@ export function BasePointsLayer({ points, onRemovePoint }: Props) {
 
         // All points are red, but active points have thicker stroke
         const strokeWidth = isActiveTrackletPoint ? activeStrokeWidth : regularStrokeWidth;
-        console.log('Point:', point, 'isActiveTrackletPoint:', isActiveTrackletPoint);
         return (
           <g key={idx} className="cursor-pointer">
             <circle
