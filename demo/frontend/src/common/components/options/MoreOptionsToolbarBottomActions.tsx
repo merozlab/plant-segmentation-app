@@ -21,18 +21,22 @@ import {
 import { ChevronLeft, ChevronRight } from '@carbon/icons-react'; // Import ChevronRight
 import { Button } from 'react-daisyui';
 import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper';
-import { useAtom } from 'jotai'; // Import useAtomValue and useAtom
-// import { sessionAtom } from '@/demo/atoms'; // Import sessionAtom
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react'; // Import state to handle button loading state
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom'; // Import our mask readiness state
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom } from '@/demo/atoms';
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
 export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) {
-  const [isLoading, setIsLoading] = useState(false); // Add loading state for the button
-  const [areMasksReady,] = useAtom(masksReadyAtom); // We only need the setter here
+  const [isLoading, setIsLoading] = useState(false);
+  const areMasksReady = useAtomValue(masksReadyAtom);
+  const session = useAtomValue(sessionAtom);
+  const [trackletObjects] = useAtom(trackletObjectsAtom);
+  const setCenterlinesMap = useSetAtom(centerlinesAtom);
 
   function handleReturnToObjectsTab() {
     onTabChange(OBJECT_TOOLBAR_INDEX);
@@ -40,15 +44,45 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
 
   // Make the handler async
   async function handleSwitchToCenterlineTab() {
+    setIsLoading(true);
+    // helper to fetch PCA-computed centerlines and populate atom
+    async function fetchCenterlinesPCA() {
+      if (!session?.id) {
+        console.error('Missing session for centerline PCA');
+        return;
+      }
+      try {
+        const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: session.id }),
+        });
+        if (!resp.ok) throw new Error(resp.statusText);
+        const data: Record<string, [number[], number[]][]> = await resp.json();
+        const mapping: Record<number, Record<number, [number, number][]>> = {};
+        Object.entries(data).forEach(([objName, frames]) => {
+          const idx = parseInt(objName.split('_')[1], 10) - 1;
+          const tracklet = trackletObjects[idx];
+          if (!tracklet) return;
+          const objMap: Record<number, [number, number][]> = {};
+          frames.forEach(([xs, ys], fi) => {
+            objMap[fi] = xs.map((x, i) => [x, ys[i]]);
+          });
+          mapping[tracklet.id] = objMap;
+        });
+        setCenterlinesMap(mapping);
+      } catch (e) {
+        console.error('Error fetching centerlines PCA:', e);
+      }
+    }
     if (areMasksReady) {
+      await fetchCenterlinesPCA();
       setIsLoading(false);
       onTabChange(CENTERLINE_TOOLBAR_INDEX);
-      return;
-    }
-    else {
-      setIsLoading(true);
-      // Wait 5 seconds and try again
-      setTimeout(() => {
+    } else {
+      // retry after masks generation delay
+      setTimeout(async () => {
+        await fetchCenterlinesPCA();
         setIsLoading(false);
         onTabChange(CENTERLINE_TOOLBAR_INDEX);
       }, 5000);
@@ -70,7 +104,7 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
         onClick={handleSwitchToCenterlineTab}
         endIcon={isLoading ? null : <ChevronRight />}
         disabled={isLoading}>
-        {isLoading ? 'Finishing mask generation...' : 'Next'}
+        {isLoading ? 'Getting centerlines...' : 'Next'}
       </PrimaryCTAButton>
     </ToolbarBottomActionsWrapper>
   );

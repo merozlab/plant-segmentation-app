@@ -83,6 +83,52 @@ def display_centerlines(centerlines):
     # st.pyplot(plt.gcf())
 
 
+def get_centerline_pca(path):
+    # Read the image
+    frame = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+
+    # Apply threshold to get mask
+    _, mask = cv2.threshold(frame, 128, 255, cv2.THRESH_BINARY)
+
+    # Get non-zero points
+    ys, xs = np.nonzero(mask)
+    pts = np.vstack((xs, ys)).T  # shape (n,2)
+
+    # Global PCA
+    mu = pts.mean(axis=0)
+    Xc = pts - mu
+    C = np.cov(Xc, rowvar=False)
+    eigvals, eigvecs = np.linalg.eigh(C)
+    v1 = eigvecs[:, np.argmax(eigvals)]
+
+    # Project and sort
+    s = Xc.dot(v1)
+    order = np.argsort(s)
+    pts_sorted = Xc[order]
+
+    # Bin into segments
+    n = len(pts_sorted)
+    centroids = []
+    directions = []
+    bins = 100
+    for j in range(bins):
+        seg = pts_sorted[j * n // bins : (j + 1) * n // bins]
+        mu_j = seg.mean(axis=0)
+        Cj = np.cov(seg, rowvar=False)
+        wj, vj = np.linalg.eigh(Cj)
+        v1j = vj[:, np.argmax(wj)]
+        centroids.append(mu_j)
+        directions.append(v1j)
+
+    # Convert centroids to numpy array and store as global variable
+    centroids_arr = np.array(centroids) + mu
+
+    x_uniform, y_uniform = distribute_points(
+        centroids_arr[:, 0], centroids_arr[:, 1], n_points=100
+    )
+    return [x_uniform.tolist(), y_uniform.tolist()]
+
+
 def display_angles(avg_angles, std_angles):
     plt.figure()
     plt.errorbar(

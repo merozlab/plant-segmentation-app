@@ -10,7 +10,7 @@ import zipfile
 import time
 import threading
 import subprocess
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 from pathlib import Path
 import os
 import numpy as np
@@ -22,6 +22,7 @@ from mask_to_curvature import (
     find_closest_point,
     get_centerline,
     get_contours,
+    get_centerline_pca,
 )
 from pycocotools import mask as mask_util
 
@@ -87,7 +88,6 @@ def send_uploaded_video(path: str):
 def maskify() -> Response:
     data = request.json
     base = UPLOADS_PATH / data["session_id"]
-    print("data", data)
     # get original file names
     original_file_names = []
     if data.get("original_file_path", None):
@@ -165,7 +165,7 @@ def zip_masks() -> Response:
     )
 
 
-@app.route("/centerlines", methods=["POST"])
+@app.route("/centerline", methods=["POST"])
 def centerline() -> Response:
     data = request.json
     session_id = data["session_id"]
@@ -176,14 +176,68 @@ def centerline() -> Response:
         return make_response("Session not found", 404)
     elif not masks_dir.exists():
         return make_response("Masks not found", 404)
-    base_coords: Tuple[int, int] = data["base_coords"][0]
+    object_dir = masks_dir / data["object"]
+    response = []
+    for frame in sorted(object_dir.glob("*.bmp")):
+        contour = get_contours(frame)
+        start_index = find_closest_point(contour, data["base_coords"][:2])
+        centerline = get_centerline(contour, start_index, display=False)
+        img = cv2.imread(str(frame))
+        height, _ = img.shape[:2]
+        transformed_centerline = [
+            centerline[0].tolist(),
+            (height - centerline[1]).tolist(),
+        ]
+        response.append(transformed_centerline)
+    return make_response(
+        response,
+        200,
+    )
+
+
+@app.route("/centerlines_pca", methods=["POST"])
+def centerlines_pca() -> Response:
+    data = request.json
+    session_id = data["session_id"]
+    base = UPLOADS_PATH / session_id
+    masks_dir = base / "masks"
+    response = {}
+    # Load the JSON file with mask data
+    if not base.exists():
+        return make_response("Session not found", 404)
+    elif not masks_dir.exists():
+        return make_response("Masks not found", 404)
+    for object_dir in masks_dir.iterdir():
+        if object_dir.is_dir():
+            response[object_dir.name] = []
+            response[object_dir.name] = [
+                get_centerline_pca(frame) for frame in sorted(object_dir.glob("*.bmp"))
+            ]
+    return make_response(
+        response,
+        200,
+    )
+
+
+@app.route("/centerlines_zip", methods=["POST"])
+def centerline_zip() -> Response:
+    data = request.json
+    session_id = data["session_id"]
+    base = UPLOADS_PATH / session_id
+    masks_dir = base / "masks"
+    # Load the JSON file with mask data
+    if not base.exists():
+        return make_response("Session not found", 404)
+    elif not masks_dir.exists():
+        return make_response("Masks not found", 404)
+    base_coords: Tuple[int, int] = data["base_coords"]
     objects = [f"object_{o + 1}" for o in range(len(data["base_coords"]))]
     centerlines = {object: [] for object in objects}
-    for object in objects:
+    for i, object in enumerate(objects):
         object_dir = masks_dir / object
-        for frame in sorted(object_dir.glob("*.jpg")):
+        for frame in sorted(object_dir.glob("*.bmp")):
             contour = get_contours(frame)
-            start_index = find_closest_point(contour, base_coords)
+            start_index = find_closest_point(contour, base_coords[i])
             centerline = get_centerline(contour, start_index, display=False)
             centerlines[object].append(centerline)
     centerlines_df = centerlines_to_df(centerlines)

@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import ToolbarObjectContainer from '@/common/components/annotations/ToolbarObjectContainer';
-import ObjectThumbnail from '@/common/components/annotations/ObjectThumbnail';
+// import ToolbarObjectContainer from '@/common/components/annotations/ToolbarObjectContainer';
+// import ObjectThumbnail from '@/common/components/annotations/ObjectThumbnail';
 // import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import { Button } from 'react-daisyui';
 import { ChevronLeft, Download } from '@carbon/icons-react';
@@ -23,12 +23,11 @@ import {
   DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { trackletObjectsAtom, activeTrackletObjectIdAtom, sessionAtom, frameIndexAtom } from '@/demo/atoms';
-import { useAtomValue, useSetAtom, useAtom } from 'jotai';
+import { trackletObjectsAtom, activeTrackletObjectIdAtom, sessionAtom, centerlinesAtom } from '@/demo/atoms';
+import { useAtomValue, useAtom } from 'jotai';
 import { useEffect } from 'react';
-import useVideo from '@/common/components/video/editor/useVideo';
+// import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
-import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import OptionButton from '@/common/components/options/OptionButton';
 
 type Props = {
@@ -39,25 +38,28 @@ type Props = {
 export default function CenterlineToolbar({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom);
   console.log(session?.id)
-  const video = useVideo();
+  // const video = useVideo();
   // const { enqueueMessage } = useMessagesSnackbar();
-  const setFrameIndex = useSetAtom(frameIndexAtom);
+  // const setFrameIndex = useSetAtom(frameIndexAtom);
   const [activeTrackletId, setActiveTrackletObjectId] = useAtom(
     activeTrackletObjectIdAtom,
   );
+  const centerlinesMap = useAtomValue(centerlinesAtom);
   const [trackletObjects] = useAtom(trackletObjectsAtom);
 
   // Reset video to first frame and pause when this component mounts
-  useEffect(() => {
-    if (video) {
-      video.frame = 0;
-      setFrameIndex(0);
-      video.pause();
-    }
-
-    return () => {
-    };
-  }, [video, setFrameIndex]);
+  // useEffect(() => {
+  //   if (video) {
+  //     // stop any playback and reset to initial frame
+  //     video.stop();
+  //     // ensure paused state
+  //     video.pause();
+  //     // seek to frame zero and update indicator
+  //     video.frame = 0;
+  //     setFrameIndex(0);
+  //   }
+  //   // no cleanup required
+  // }, [video, setFrameIndex]);
   // Set active tracklet id to 0 on mount
   useEffect(() => {
     setActiveTrackletObjectId(0);
@@ -69,40 +71,38 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   const allPointsSelected = trackletObjects.every(obj => obj.basePoint);
   const isLoading = false; // Replace with actual loading state
   async function handleGetCenterlines() {
-    if (session) {
-      try {
-        const response = await fetch(`${VIDEO_API_ENDPOINT}/centerlines`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            session_id: session.id,
-            base_coords: trackletObjects
-              .sort((a, b) => a.id - b.id)
-              .map(obj => obj.basePoint?.slice(0, 2)),
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to get centerlines');
-        }
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${session.id}_centerlines.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error('Error fetching centerlines:', error);
-      }
-    } else {
+    if (!session) {
       console.error('Session ID is null in handleGetCenterlines');
+      return;
     }
+    if (activeTrackletId == null) {
+      console.error('No active tracklet selected');
+      return;
+    }
+    // Build CSV from cached centerlines
+    const objMap = centerlinesMap[activeTrackletId] || {};
+    const lines: string[] = ['frame,x,y'];
+    // Iterate frames in order
+    Object.keys(objMap)
+      .map(k => parseInt(k, 10))
+      .sort((a, b) => a - b)
+      .forEach(frameIdx => {
+        const pts: [number, number][] = objMap[frameIdx] || [];
+        pts.forEach(pt => {
+          const [x, y] = pt;
+          lines.push(`${frameIdx},${x},${y}`);
+        });
+      });
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${session.id}_object_${activeTrackletId}_centerlines.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   }
 
   return (
@@ -115,7 +115,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         className="pb-4"
       />
 
-      <div className="grow p-5 false overflow-y-auto">
+      {/* <div className="grow p-5 false overflow-y-auto">
         {trackletObjects.map((obj, index) => {
           const tracklet = trackletObjects.find(t => t.id === obj.id);
           const color = tracklet?.color || '#ffffff';
@@ -154,7 +154,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
             </ToolbarObjectContainer>
           );
         })}
-      </div>
+      </div> */}
 
       <div className="p-5 md:p-8 flex flex-col gap-4">
         <OptionButton

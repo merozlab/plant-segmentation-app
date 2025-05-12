@@ -123,6 +123,12 @@ export const pointsAtom = atom<SegmentationPoint[]>(get => {
 
 export const basePointsAtom = atom<SegmentationPoint[]>([]);
 
+// Atom to cache computed centerlines per object per frame
+// Structure: { [objectId]: { [frameIndex]: Array<[x, y]> } }
+export const centerlinesAtom = atom<Record<number, Record<number, [number, number][]>>>(
+  {}
+);
+
 export const labelTypeAtom = atom<'positive' | 'negative'>('positive');
 
 export const isAddObjectEnabledAtom = atom<boolean>(get => {
