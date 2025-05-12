@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 import DownloadOption from './DownloadOption';
+import DownloadFramesOption from './DownloadFramesOption';
 
 export default function ShareSection() {
   return (
-    <div className="p-5 md:p-8">
+    <div className="p-5 md:p-8 flex flex-col gap-4">
       <DownloadOption />
+      <DownloadFramesOption />
     </div>
   );
 }

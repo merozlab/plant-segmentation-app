@@ -7,11 +7,11 @@ services:
     ports:
       - 7262:80
 
-  backend:
-    image: sam2/backend
+  inference:
+    image: sam2/inference
     build:
       context: .
-      dockerfile: backend.Dockerfile
+      dockerfile: inference.Dockerfile
     ports:
       - 7263:5000
     volumes:
@@ -24,8 +24,32 @@ services:
       - GUNICORN_THREADS=2
       - GUNICORN_PORT=5000
       - API_URL=http://localhost:7263
-      - DEFAULT_VIDEO_PATH=gallery/05_default_juggle.mp4
-      # # ffmpeg/video encode settings
+      - VIDEO_API_URL=http://video:5000
+      - DEFAULT_VIDEO_PATH=gallery/xavier.mp4
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+
+  video:
+    image: sam2/video
+    build:
+      context: .
+      dockerfile: video.Dockerfile
+    ports:
+      - 7264:5000
+    volumes:
+      - ./demo/data/:/data/:rw
+    environment:
+      - SERVER_ENVIRONMENT=DEV
+      - FLASK_APP=video_app
+      - FLASK_DEBUG=1
+      - API_URL=http://localhost:7264
+      - INFERENCE_API_URL=http://inference:5000
+      # ffmpeg/video encode settings
       - FFMPEG_NUM_THREADS=1
       - VIDEO_ENCODE_CODEC=libx264
       - VIDEO_ENCODE_CRF=23
@@ -33,10 +57,3 @@ services:
       - VIDEO_ENCODE_MAX_WIDTH=1280
       - VIDEO_ENCODE_MAX_HEIGHT=720
       - VIDEO_ENCODE_VERBOSE=False
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]

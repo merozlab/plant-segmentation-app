@@ -60,7 +60,7 @@ export default function RootLayout() {
         <Suspense
           fallback={
             <LoadingStateScreen
-              title="Loading demo..."
+              title="Loading tracker..."
               description="This may take a few moments, you're almost there!"
             />
           }>

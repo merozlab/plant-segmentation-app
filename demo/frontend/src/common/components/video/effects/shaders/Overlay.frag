@@ -25,10 +25,24 @@ uniform bool uBorder;
 uniform sampler2D uMaskTexture0;
 uniform sampler2D uMaskTexture1;
 uniform sampler2D uMaskTexture2;
+uniform sampler2D uMaskTexture3;
+uniform sampler2D uMaskTexture4;
+uniform sampler2D uMaskTexture5;
+uniform sampler2D uMaskTexture6;
+uniform sampler2D uMaskTexture7;
+uniform sampler2D uMaskTexture8;
+uniform sampler2D uMaskTexture9;
 
 uniform vec4 uMaskColor0;
 uniform vec4 uMaskColor1;
 uniform vec4 uMaskColor2;
+uniform vec4 uMaskColor3;
+uniform vec4 uMaskColor4;
+uniform vec4 uMaskColor5;
+uniform vec4 uMaskColor6;
+uniform vec4 uMaskColor7;
+uniform vec4 uMaskColor8;
+uniform vec4 uMaskColor9;
 
 uniform float uTime;
 uniform vec2 uClickPos;
@@ -78,6 +92,13 @@ void main() {
   vec4 color1 = uMaskColor0 / 255.0;
   vec4 color2 = uMaskColor1 / 255.0;
   vec4 color3 = uMaskColor2 / 255.0;
+  vec4 color4 = uMaskColor3 / 255.0;
+  vec4 color5 = uMaskColor4 / 255.0;
+  vec4 color6 = uMaskColor5 / 255.0;
+  vec4 color7 = uMaskColor6 / 255.0;
+  vec4 color8 = uMaskColor7 / 255.0;
+  vec4 color9 = uMaskColor8 / 255.0;
+  vec4 color10 = uMaskColor9 / 255.0;
   float saturationFactor = 0.7;
   float aspectRatio = uSize.y / uSize.x;
   vec2 tvTexCoord = vec2(vTexCoord.y, vTexCoord.x);
@@ -152,6 +173,174 @@ void main() {
 
     if(edgeColor.a <= 0.0f) {
       edgeColor = detectEdges(uMaskTexture2, 1.25, color3);
+    }
+  }
+  
+  if(uNumMasks > 3) {
+    float maskValue3 = texture(uMaskTexture3, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color4, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color4.rgb, 0.2);
+
+    if (uActiveMask == 3 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue3 * plainColor;
+    totalMaskValue += maskValue3;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture3, 1.25, color4);
+    }
+  }
+  
+  if(uNumMasks > 4) {
+    float maskValue4 = texture(uMaskTexture4, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color5, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color5.rgb, 0.2);
+
+    if (uActiveMask == 4 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue4 * plainColor;
+    totalMaskValue += maskValue4;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture4, 1.25, color5);
+    }
+  }
+  
+  if(uNumMasks > 5) {
+    float maskValue5 = texture(uMaskTexture5, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color6, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color6.rgb, 0.2);
+
+    if (uActiveMask == 5 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue5 * plainColor;
+    totalMaskValue += maskValue5;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture5, 1.25, color6);
+    }
+  }
+  
+  if(uNumMasks > 6) {
+    float maskValue6 = texture(uMaskTexture6, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color7, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color7.rgb, 0.2);
+
+    if (uActiveMask == 6 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue6 * plainColor;
+    totalMaskValue += maskValue6;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture6, 1.25, color7);
+    }
+  }
+  
+  if(uNumMasks > 7) {
+    float maskValue7 = texture(uMaskTexture7, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color8, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color8.rgb, 0.2);
+
+    if (uActiveMask == 7 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue7 * plainColor;
+    totalMaskValue += maskValue7;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture7, 1.25, color8);
+    }
+  }
+  
+  if(uNumMasks > 8) {
+    float maskValue8 = texture(uMaskTexture8, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color9, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color9.rgb, 0.2);
+
+    if (uActiveMask == 8 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue8 * plainColor;
+    totalMaskValue += maskValue8;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture8, 1.25, color9);
+    }
+  }
+  
+  if(uNumMasks > 9) {
+    float maskValue9 = texture(uMaskTexture9, tvTexCoord).r;
+    vec4 saturatedColor = lowerSaturation(color10, saturationFactor);
+    vec4 plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    vec4 rippleColor = vec4(color10.rgb, 0.2);
+
+    if (uActiveMask == 9 && uTime < timeThreshold) {
+      float dist = length(adjustedClickCoord);
+      float colorFactor = abs(sin((dist - uTime) * numRipples));
+      plainColor = vec4(mix(rippleColor, plainColor, colorFactor));
+    }
+
+    if (uTime >= timeThreshold) {
+      plainColor= vec4(vec3(saturatedColor).rgb, 1.0);
+    }
+
+    finalColor += maskValue9 * plainColor;
+    totalMaskValue += maskValue9;
+
+    if(edgeColor.a <= 0.0f) {
+      edgeColor = detectEdges(uMaskTexture9, 1.25, color10);
     }
   }
 

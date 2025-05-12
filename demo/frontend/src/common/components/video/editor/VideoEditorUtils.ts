@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {Mask, Tracklet} from '@/common/tracker/Tracker';
+import { Mask, Tracklet } from '@/common/tracker/Tracker';
 import {
   convertVideoFrameToImageData,
   findBoundingBox,
 } from '@/common/utils/ImageUtils';
-import {DataArray} from '@/jscocotools/mask';
+import { DataArray } from '@/jscocotools/mask';
 import invariant from 'invariant';
 
 function getCanvas(
@@ -202,47 +202,64 @@ export function hexToRgb(hex: string): {
   );
   return result
     ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16),
-        a: result[4] != null ? parseInt(result[4], 16) : 128,
-      }
-    : {r: 255, g: 0, b: 0, a: 128};
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+      a: result[4] != null ? parseInt(result[4], 16) : 128,
+    }
+    : { r: 255, g: 0, b: 0, a: 128 };
 }
 
 export function getPointInImage(
   event: React.MouseEvent<HTMLElement>,
   canvas: HTMLCanvasElement,
   normalized: boolean = false,
+  transformState: {
+    transformScale: number;
+    translateX: number;
+    translateY: number;
+  } = { transformScale: 1, translateX: 0, translateY: 0 },
 ): [x: number, y: number] {
   const rect = canvas.getBoundingClientRect();
 
+  function transformation(
+    x: number,
+    y: number,
+  ) {
+    // Calculate transformed coordinates based on zoom and pan
+    const transformedX = (x - 2 * transformState.translateX) / transformState.transformScale;
+    const transformedY = (y - transformState.translateY) / transformState.transformScale;
+    return [transformedX, transformedY];
+  }
   const matrix = new DOMMatrix();
-
   // First, center the image
   const elementCenter = new DOMPoint(
     canvas.clientWidth / 2,
     canvas.clientHeight / 2,
   );
+
   const imageCenter = new DOMPoint(canvas.width / 2, canvas.height / 2);
   matrix.translateSelf(
     elementCenter.x - imageCenter.x,
     elementCenter.y - imageCenter.y,
   );
-
   // Containing the object take the minimal scale
   const scale = Math.min(
     canvas.clientWidth / canvas.width,
     canvas.clientHeight / canvas.height,
   );
   matrix.scaleSelf(scale, scale, 1, imageCenter.x, imageCenter.y);
+  const [origX, origY] = transformation(event.clientX, event.clientY);
 
+  const [rectLeft, rectTop] = transformation(
+    rect.left,
+    rect.top,
+  );
   const point = new DOMPoint(
-    event.clientX - rect.left,
-    event.clientY - rect.top,
+    origX - rectLeft,
+    origY - rectTop,
   );
   const imagePoint = matrix.inverse().transformPoint(point);
-
   const x = Math.max(Math.min(imagePoint.x, canvas.width), 0);
   const y = Math.max(Math.min(imagePoint.y, canvas.height), 0);
 

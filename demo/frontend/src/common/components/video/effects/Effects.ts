@@ -127,8 +127,8 @@ export const effectPresets: EffectsCombo[] = [
     {name: 'Sobel', variant: 2},
     {name: 'EraseForeground', variant: 2},
   ],
-  [
-    {name: 'EraseBackground', variant: 0},
-    {name: 'EraseForeground', variant: 0},
-  ],
+  // [
+  //   {name: 'EraseBackground', variant: 0},
+  //   {name: 'EraseForeground', variant: 0},
+  // ],
 ];

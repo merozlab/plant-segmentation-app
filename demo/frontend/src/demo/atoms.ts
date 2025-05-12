@@ -17,7 +17,7 @@ import {
   defaultMessageMap,
   MessagesEventMap,
 } from '@/common/components/snackbar/DemoMessagesSnackbarUtils';
-import {Effects} from '@/common/components/video/effects/Effects';
+import { Effects } from '@/common/components/video/effects/Effects';
 import {
   DemoEffect,
   highlightEffects,
@@ -27,8 +27,8 @@ import {
   SegmentationPoint,
   StreamingState,
 } from '@/common/tracker/Tracker';
-import type {DataArray} from '@/jscocotools/mask';
-import {atom} from 'jotai';
+import type { DataArray } from '@/jscocotools/mask';
+import { atom } from 'jotai';
 
 export type VideoData = {
   path: string;
@@ -80,11 +80,12 @@ export type TrackletObject = {
   color: string;
   thumbnail: string | null;
   points: SegmentationPoint[][];
+  basePoint: SegmentationPoint[] | null;
   masks: TrackletMask[];
   isInitialized: boolean;
 };
 
-const MAX_NUMBER_TRACKLET_OBJECTS = 3;
+const MAX_NUMBER_TRACKLET_OBJECTS = 10;
 
 export const activeTrackletObjectIdAtom = atom<number | null>(0);
 
@@ -119,6 +120,14 @@ export const pointsAtom = atom<SegmentationPoint[]>(get => {
   const activeTracklet = get(activeTrackletObjectAtom);
   return activeTracklet?.points[frameIndex] ?? [];
 });
+
+export const basePointsAtom = atom<SegmentationPoint[]>([]);
+
+// Atom to cache computed centerlines per object per frame
+// Structure: { [objectId]: { [frameIndex]: Array<[x, y]> } }
+export const centerlinesAtom = atom<Record<number, Record<number, [number, number][]>>>(
+  {}
+);
 
 export const labelTypeAtom = atom<'positive' | 'negative'>('positive');
 
@@ -181,3 +190,7 @@ export const messageMapAtom = atom<MessagesEventMap>(defaultMessageMap);
 export const uploadingStateAtom = atom<'default' | 'uploading' | 'error'>(
   'default',
 );
+
+export const uploadErrorMessageAtom = atom<string | null>(null);
+
+export const originalFilePathAtom = atom<string | null>(null);

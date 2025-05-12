@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 import useVideo from '@/common/components/video/editor/useVideo';
-import {getPointInImage} from '@/common/components/video/editor/VideoEditorUtils';
-import {SegmentationPoint} from '@/common/tracker/Tracker';
-import {labelTypeAtom} from '@/demo/atoms';
+import { getPointInImage } from '@/common/components/video/editor/VideoEditorUtils';
+import { SegmentationPoint } from '@/common/tracker/Tracker';
+import { labelTypeAtom } from '@/demo/atoms';
 import stylex from '@stylexjs/stylex';
-import {useAtomValue} from 'jotai';
-import {MouseEvent} from 'react';
+import { useAtomValue } from 'jotai';
+import { MouseEvent, useRef, useEffect } from 'react';
+import { useTransformContext } from 'react-zoom-pan-pinch';
 
 const styles = stylex.create({
   container: {
@@ -35,30 +36,57 @@ type Props = {
   onPoint: (point: SegmentationPoint) => void;
 };
 
-export default function InteractionLayer({onPoint}: Props) {
+export default function InteractionLayer({ onPoint }: Props) {
   const video = useVideo();
   // Use labelType to swap positive and negative points. The most important use
   // case is the switch between positive and negative label for left mouse
   // clicks.
   const labelType = useAtomValue(labelTypeAtom);
+  const transformContext = useTransformContext();
+
+  // Create a ref to track the latest transform state
+  const latestTransformState = useRef(transformContext.transformState);
+
+  // Update our ref whenever the transform state changes
+  useEffect(() => {
+    latestTransformState.current = transformContext.transformState;
+  }, [transformContext.transformState]);
+
+  // Handler function for clicks
+  const handleClick = (event: MouseEvent<HTMLDivElement>, isRightClick = false) => {
+    const canvas = video?.getCanvas();
+    if (canvas == null) return;
+
+    // Always get the most up-to-date transform state directly from the context
+    // This ensures we have the latest values even if the effect hasn't run yet
+    const currentTransform = transformContext.transformState;
+
+    // Also check our ref as a backup
+    const refTransform = latestTransformState.current;
+
+    // Use the context values first, fall back to ref if needed
+    const scale = currentTransform.scale || refTransform.scale;
+    const positionX = currentTransform.positionX || refTransform.positionX;
+    const positionY = currentTransform.positionY || refTransform.positionY;
+
+    const point = getPointInImage(event, canvas, false, {
+      transformScale: scale,
+      translateX: positionX,
+      translateY: positionY,
+    });
+
+    onPoint([point[0], point[1], isRightClick ?
+      (labelType === 'positive' ? 0 : 1) :
+      (labelType === 'positive' ? 1 : 0)]);
+  };
 
   return (
     <div
       {...stylex.props(styles.container)}
-      onClick={(event: MouseEvent<HTMLDivElement>) => {
-        const canvas = video?.getCanvas();
-        if (canvas != null) {
-          const point = getPointInImage(event, canvas);
-          onPoint([...point, labelType === 'positive' ? 1 : 0]);
-        }
-      }}
+      onClick={(event) => handleClick(event)}
       onContextMenu={event => {
         event.preventDefault();
-        const canvas = video?.getCanvas();
-        if (canvas != null) {
-          const point = getPointInImage(event, canvas);
-          onPoint([...point, labelType === 'positive' ? 0 : 1]);
-        }
+        handleClick(event, true);
       }}
     />
   );

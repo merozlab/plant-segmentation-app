@@ -16,6 +16,7 @@
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import useVideo from '@/common/components/video/editor/useVideo';
 import useInputVideo from '@/common/components/video/useInputVideo';
+import { masksReadyAtom } from '@/common/components/options/masksReadyAtom';
 import {
   activeTrackletObjectIdAtom,
   isPlayingAtom,
@@ -33,6 +34,7 @@ export default function useRestartSession() {
   const setActiveTrackletObjectId = useSetAtom(activeTrackletObjectIdAtom);
   const setTracklets = useSetAtom(trackletObjectsAtom);
   const setLabelType = useSetAtom(labelTypeAtom);
+  const setMasksReady = useSetAtom(masksReadyAtom); // Add setter for masksReadyAtom
   const {clearMessage} = useMessagesSnackbar();
 
   const {inputVideo} = useInputVideo();
@@ -55,6 +57,7 @@ export default function useRestartSession() {
     setActiveTrackletObjectId(0);
     setTracklets([]);
     setLabelType('positive');
+    setMasksReady(false); // Reset masks ready state when session is restarted
     onRestart?.();
     clearMessage();
     setIsLoading(false);

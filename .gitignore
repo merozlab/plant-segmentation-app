@@ -17,3 +17,5 @@ app/app_data/*
 .poetry/
 poetry.lock
 __pypackages__/
+
+node_modules/

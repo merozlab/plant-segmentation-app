@@ -17,7 +17,7 @@ import TrackletsAnnotation from '@/common/components/annotations/TrackletsAnnota
 import useCloseSessionBeforeUnload from '@/common/components/session/useCloseSessionBeforeUnload';
 import MessagesSnackbar from '@/common/components/snackbar/MessagesSnackbar';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
-import {OBJECT_TOOLBAR_INDEX} from '@/common/components/toolbar/ToolbarConfig';
+import { CENTERLINE_TOOLBAR_INDEX, OBJECT_TOOLBAR_INDEX } from '@/common/components/toolbar/ToolbarConfig';
 import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
 import VideoFilmstripWithPlayback from '@/common/components/video/VideoFilmstripWithPlayback';
 import {
@@ -30,11 +30,23 @@ import VideoEditor from '@/common/components/video/editor/VideoEditor';
 import useResetDemoEditor from '@/common/components/video/editor/useResetEditor';
 import useVideo from '@/common/components/video/editor/useVideo';
 import InteractionLayer from '@/common/components/video/layers/InteractionLayer';
-import {PointsLayer} from '@/common/components/video/layers/PointsLayer';
+import { PointsLayer } from '@/common/components/video/layers/PointsLayer';
+// import { BasePointsLayer } from '@/common/components/video/layers/BasePointsLayer';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
 import useScreenSize from '@/common/screen/useScreenSize';
-import {SegmentationPoint} from '@/common/tracker/Tracker';
+import ToggleEffectsButton from '@/common/components/button/ToggleEffectsButton';
+import ActionButton from '@/common/components/button/ActionButton';
+import { ZoomIn, ZoomOut, Reset } from '@carbon/icons-react';
+import { SegmentationPoint } from '@/common/tracker/Tracker';
+import { type ErrorObject } from 'serialize-error';
+// import { TransformWrapper, useTransformEffect } from "react-zoom-pan-pinch";
+import { TransformWrapper } from 'react-zoom-pan-pinch';
+import React from "react";
+// import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+// import { centerlinesAtom } from '@/demo/atoms';
+import { CenterlineLayer } from '@/common/components/video/layers/CenterlineLayer';
+
 import {
   activeTrackletObjectIdAtom,
   frameIndexAtom,
@@ -42,6 +54,7 @@ import {
   isPlayingAtom,
   isVideoLoadingAtom,
   pointsAtom,
+  // basePointsAtom,
   sessionAtom,
   streamingStateAtom,
   trackletObjectsAtom,
@@ -49,11 +62,11 @@ import {
   VideoData,
 } from '@/demo/atoms';
 import useSettingsContext from '@/settings/useSettingsContext';
-import {color, spacing} from '@/theme/tokens.stylex';
+import { color, spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
-import {useAtom, useAtomValue, useSetAtom} from 'jotai';
-import {useEffect, useState} from 'react';
-import type {ErrorObject} from 'serialize-error';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useState, useEffect } from 'react';
+
 
 const styles = stylex.create({
   container: {
@@ -61,6 +74,7 @@ const styles = stylex.create({
     flexDirection: 'column',
     overflow: 'auto',
     width: '100%',
+    height: '100%', // Ensure this container has full height
     borderColor: color['gray-800'],
     backgroundColor: color['gray-800'],
     borderWidth: 8,
@@ -92,8 +106,8 @@ type Props = {
   video: VideoData;
 };
 
-export default function DemoVideoEditor({video: inputVideo}: Props) {
-  const {settings} = useSettingsContext();
+export default function DemoVideoEditor({ video: inputVideo }: Props) {
+  const { settings } = useSettingsContext();
   const video = useVideo();
 
   const [isSessionStartFailed, setIsSessionStartFailed] =
@@ -104,27 +118,27 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
   const [activeTrackletId, setActiveTrackletObjectId] = useAtom(
     activeTrackletObjectIdAtom,
   );
-  const setTrackletObjects = useSetAtom(trackletObjectsAtom);
+  // const [trackletObjects, setTrackletObjects] = useAtom(trackletObjectsAtom);
+  const [, setTrackletObjects] = useAtom(trackletObjectsAtom);
+
   const setFrameIndex = useSetAtom(frameIndexAtom);
   const points = useAtomValue(pointsAtom);
+  // const [basePoints, setBasePoints] = useAtom(basePointsAtom);
+  // Cache of computed centerlines per object per frame
   const isAddObjectEnabled = useAtomValue(isAddObjectEnabledAtom);
   const streamingState = useAtomValue(streamingStateAtom);
   const isPlaying = useAtomValue(isPlayingAtom);
   const isVideoLoading = useAtomValue(isVideoLoadingAtom);
   const uploadingState = useAtomValue(uploadingStateAtom);
-
-  const [renderingError, setRenderingError] = useState<ErrorObject | null>(
-    null,
-  );
-
-  const {isMobile} = useScreenSize();
-
+  const [renderingError, setRenderingError] = useState<ErrorObject | null>(null);
+  // const setCenterlinesMap = useSetAtom(centerlinesAtom);
+  const { isMobile } = useScreenSize();
   const [tabIndex] = useToolbarTabs();
-  const {enqueueMessage} = useMessagesSnackbar();
+  const { enqueueMessage } = useMessagesSnackbar();
 
   useCloseSessionBeforeUnload();
 
-  const {resetEditor, resetSession} = useResetDemoEditor();
+  const { resetEditor, resetSession } = useResetDemoEditor();
   useEffect(() => {
     resetEditor();
   }, [inputVideo, resetEditor]);
@@ -139,7 +153,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     video?.addEventListener('frameUpdate', onFrameUpdate);
 
     function onSessionStarted(event: SessionStartedEvent) {
-      setSession({id: event.sessionId, ranPropagation: false});
+      setSession({ id: event.sessionId, ranPropagation: false });
     }
 
     video?.addEventListener('sessionStarted', onSessionStarted);
@@ -225,6 +239,104 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     handleOptimisticPointUpdate([...points, point]);
   }
 
+  // async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint) {
+  //   if (session == null) {
+  //     return;
+  //   }
+
+  //   function setBasePointForActiveTracklet(basePoint: SegmentationPoint) {
+  //     if (activeTrackletId === null) {
+  //       return;
+  //     }
+  //     // Create a copy with the updated basePoint for the active tracklet
+  //     const updatedTracklets = trackletObjects.map(tracklet => {
+  //       if (tracklet.id === activeTrackletId) {
+  //         return {
+  //           ...tracklet,
+  //           basePoint: basePoint
+  //         };
+  //       }
+  //       return tracklet;
+  //     });
+  //     setTrackletObjects(updatedTracklets);
+  //   }
+  //   if (activeTrackletId != null) {
+  //     setBasePointForActiveTracklet(newPoint);
+  //     console.log('Setting base point', newPoint);
+  //     const currentIndex = trackletObjects.findIndex(t => t.id === activeTrackletId);
+
+  //     // Find all tracklets that do not have a basePoint set (excluding the current one)
+  //     const unselectedBasePointIndexes = trackletObjects
+  //       .map((t, idx) => ({ idx, hasBasePoint: !!t.basePoint }))
+  //       .filter(({ idx, hasBasePoint }) => !hasBasePoint && idx !== currentIndex)
+  //       .map(({ idx }) => idx);
+
+  //     let nextIndex: number | null = null;
+
+  //     if (currentIndex < trackletObjects.length - 1) {
+  //       // Default: move to next index
+  //       nextIndex = currentIndex + 1;
+  //     } else if (unselectedBasePointIndexes.length > 0) {
+  //       // At last index: move to first index without a basePoint
+  //       nextIndex = unselectedBasePointIndexes[0];
+  //     }
+
+  //     if (
+  //       nextIndex !== null &&
+  //       nextIndex >= 0 &&
+  //       nextIndex < trackletObjects.length
+  //     ) {
+  //       setActiveTrackletObjectId(trackletObjects[nextIndex].id);
+  //       console.log('set next tracklet id:', trackletObjects[nextIndex].id);
+  //     }
+  //   } else {
+  //     console.log('Missing tracklet');
+  //   }
+  // }
+
+  // async function handleAddBasePoint(point: SegmentationPoint) {
+  //   if (streamingState === 'partial' || streamingState === 'requesting') {
+  //     return;
+  //   }
+  //   if (isPlaying) {
+  //     return video?.pause();
+  //   }
+  //   if (basePoints.length >= trackletObjects.length) {
+  //     return;
+  //   }
+  //   setBasePoints([...basePoints, point]);
+  //   handleOptimisticBasePointUpdate(point);
+  //   // only fetch centerline if session and object valid
+  //   if (!session?.id || activeTrackletId == null) {
+  //     return;
+  //   }
+  //   const objectIndex = trackletObjects.findIndex(t => t.id === activeTrackletId);
+  //   if (objectIndex < 0) {
+  //     return;
+  //   }
+  //   try {
+  //     const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({ session_id: session.id, object: `object_${objectIndex + 1}` }),
+  //     });
+  //     if (!resp.ok) {
+  //       console.error('Centerline fetch failed', resp.statusText);
+  //       return;
+  //     }
+  //     // Backend returns an array per frame: [xs[], ys[]]
+  //     const data: Array<[number[], number[]]> = await resp.json();
+  //     const mapping: Record<number, [number, number][]> = {};
+  //     data.forEach(([xs, ys], idx) => {
+  //       mapping[idx] = xs.map((x, i) => [x, ys[i]]);
+  //     });
+  //     setCenterlinesMap(prev => ({ ...prev, [activeTrackletId]: mapping }));
+  //   } catch (e) {
+  //     console.error('Centerline fetch error', e);
+  //   }
+  // }
+
+
   function handleRemovePoint(point: SegmentationPoint) {
     if (
       isPlaying ||
@@ -236,10 +348,51 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
     handleOptimisticPointUpdate(points.filter(p => p !== point));
   }
 
+  // async function handleOptimisticRemoveBasePointUpdate(point: SegmentationPoint) {
+  //   if (session == null) {
+  //     return;
+  //   }
+  //   if (activeTrackletId != null) {
+  //     const trackletWithSameBasePoint = trackletObjects.find(
+  //       t => t.basePoint && t.basePoint[0] === point?.[0] && t.basePoint[1] === point?.[1]
+  //     );
+  //     if (trackletWithSameBasePoint) {
+  //       const updatedTracklets = trackletObjects.map(tracklet => {
+  //         if (
+  //           tracklet.id === trackletWithSameBasePoint.id
+  //         ) {
+  //           return {
+  //             ...tracklet,
+  //             basePoint: null,
+  //           };
+  //         }
+  //         return tracklet;
+  //       });
+  //       setTrackletObjects(updatedTracklets);
+  //     }
+  //     return;
+  //   }
+  // }
+
+  // function handleRemoveBasePoint(point: SegmentationPoint) {
+  //   if (
+  //     isPlaying ||
+  //     streamingState === 'partial' ||
+  //     streamingState === 'requesting'
+  //   ) {
+  //     return;
+  //   }
+  //   console.log('Removing base point', point);
+  //   setBasePoints(basePoints.filter(p => p !== point));
+  //   handleOptimisticRemoveBasePointUpdate(point);
+  // }
   // The interaction layer handles clicks onto the video canvas. It is used
   // to get absolute point clicks within the video's coordinate system.
   // The PointsLayer handles rendering of input points and allows removing
   // individual points by clicking on them.
+
+
+
   const layers = (
     <>
       {tabIndex === OBJECT_TOOLBAR_INDEX && (
@@ -255,6 +408,22 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
           />
         </>
       )}
+      {tabIndex === CENTERLINE_TOOLBAR_INDEX && (
+        <>
+          {/* <InteractionLayer
+            key="basepoint-interaction-layer"
+            onPoint={point => handleAddBasePoint(point)}
+          /> */}
+          {/* {basePoints && (
+            <BasePointsLayer
+              key="base-points-layer"
+              points={basePoints}
+              onRemovePoint={handleRemoveBasePoint}
+            />
+          )} */}
+          <CenterlineLayer key="centerline-layer" />
+        </>
+      )}
       {!isMobile && <MessagesSnackbar key="snackbar-layer" />}
     </>
   );
@@ -264,7 +433,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
       {(isVideoLoading || session === null) && !isSessionStartFailed && (
         <div {...stylex.props(styles.loadingScreenWrapper)}>
           <LoadingStateScreen
-            title="Loading demo..."
+            title="Loading tracker..."
             description="This may take a few moments, you're almost there!"
           />
         </div>
@@ -276,7 +445,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
             description={
               <>Uh oh, it looks like there was an issue starting a session.</>
             }
-            linkProps={{to: '..', label: 'Back to homepage'}}
+            linkProps={{ to: '..', label: 'Back to homepage' }}
           />
         </div>
       )}
@@ -285,7 +454,7 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
           <LoadingStateScreen
             title="Well, this is embarrassing..."
             description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
-            linkProps={{to: '..', label: 'Back to homepage'}}
+            linkProps={{ to: '..', label: 'Back to homepage' }}
           />
         </div>
       )}
@@ -295,16 +464,74 @@ export default function DemoVideoEditor({video: inputVideo}: Props) {
         </div>
       )}
       <div {...stylex.props(styles.container)}>
-        <VideoEditor
-          video={inputVideo}
-          layers={layers}
-          loading={session == null}>
-          <div className="bg-graydark-800 w-full">
-            <VideoFilmstripWithPlayback />
-            <TrackletsAnnotation />
-          </div>
-        </VideoEditor>
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.5}
+          maxScale={3}
+        >
+          {({ zoomIn, zoomOut, resetTransform }) => (
+            <React.Fragment>
+              <VideoEditor
+                video={inputVideo}
+                layers={layers}
+                loading={session == null}
+              >
+                {/* This div contains the filmstrip/annotations AND the buttons column */}
+                <div className="flex w-full">
+                  {/* This div is the main content area that should be zoomable/pannable via VideoEditor's internal TransformComponent */}
+                  <div className="bg-graydark-800 w-[90%]">
+                    <VideoFilmstripWithPlayback />
+                    <TrackletsAnnotation />
+                  </div>
+                  {/* This div is for controls and should NOT be part of the TransformComponent's content in VideoEditor */}
+                  <div className="bg-graydark-800 w-[10%]">
+                    <div className="flex flex-col items-center justify-start pt-8">
+                      <ToggleEffectsButton />
+                      <div className="mt-2">
+                        <ActionButton
+                          message="Zoom In"
+                          onClick={() => {
+                            zoomIn();
+                            // Dispatch custom event to notify point layers
+                            document.dispatchEvent(new CustomEvent('react-zoom-pan-pinch-zoom-update'));
+                          }}
+                          isDisabled={false}
+                          icon={ZoomIn}
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <ActionButton
+                          message="Zoom Out"
+                          onClick={() => {
+                            zoomOut();
+                            // Dispatch custom event to notify point layers
+                            document.dispatchEvent(new CustomEvent('react-zoom-pan-pinch-zoom-update'));
+                          }}
+                          isDisabled={false}
+                          icon={ZoomOut}
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <ActionButton
+                          message="Reset"
+                          onClick={() => {
+                            resetTransform();
+                            // Dispatch custom event to notify point layers
+                            document.dispatchEvent(new CustomEvent('react-zoom-pan-pinch-zoom-update'));
+                          }}
+                          isDisabled={false}
+                          icon={Reset}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </VideoEditor>
+            </React.Fragment>
+          )}
+        </TransformWrapper>
       </div>
     </>
   );
 }
+

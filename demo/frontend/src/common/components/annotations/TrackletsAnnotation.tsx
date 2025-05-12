@@ -22,6 +22,7 @@ import stylex from '@stylexjs/stylex';
 
 const styles = stylex.create({
   container: {
+    overflowY: 'scroll',
     marginTop: m[3],
     height: 75,
     paddingHorizontal: spacing[4],

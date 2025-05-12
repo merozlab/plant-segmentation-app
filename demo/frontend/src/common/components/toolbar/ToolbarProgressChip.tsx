@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {OBJECT_TOOLBAR_INDEX} from '@/common/components/toolbar/ToolbarConfig';
+import { OBJECT_TOOLBAR_INDEX } from '@/common/components/toolbar/ToolbarConfig';
 import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
-import {streamingStateAtom} from '@/demo/atoms';
-import {useAtomValue} from 'jotai';
-import {useMemo} from 'react';
-import {Loading} from 'react-daisyui';
+import { streamingStateAtom } from '@/demo/atoms';
+import { useAtomValue } from 'jotai';
+import { useMemo } from 'react';
+import { Loading } from 'react-daisyui';
 
-const TOTAL_DEMO_STEPS = 3;
+const TOTAL_DEMO_STEPS = 4;
 
 export default function ToolbarProgressChip() {
   const [toolbarIndex] = useToolbarTabs();
@@ -34,7 +34,9 @@ export default function ToolbarProgressChip() {
     if (toolbarIndex === OBJECT_TOOLBAR_INDEX) {
       return streamingState !== 'full' ? 1 : 2;
     }
-    return 3;
+    else {
+      return toolbarIndex + 2;
+    }
   }
 
   return (

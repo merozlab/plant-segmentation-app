@@ -40,6 +40,7 @@ export type Tracklet = {
   color: string;
   thumbnail: string | null;
   points: FramePoints[];
+  basePoint: SegmentationPoint | null;
   masks: Mask[];
   isInitialized: boolean;
 };

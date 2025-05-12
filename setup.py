@@ -52,6 +52,7 @@ EXTRA_PACKAGES = {
         "imagesize>=1.4.1",
         "pycocotools>=2.0.8",
         "strawberry-graphql>=0.243.0",
+        "opencv-python>=4.7.0",
     ],
     "dev": [
         "black==24.2.0",

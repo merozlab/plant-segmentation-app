@@ -425,7 +425,7 @@ export default class VideoWorkerContext {
     const frames = decodedVideo.frames;
 
     for (let frameIndex = 0; frameIndex < frames.length; ++frameIndex) {
-      await this._drawFrameImpl(form, frameIndex, true);
+      await this._drawFrameImpl(form, frameIndex, false);
 
       const frame = frames[frameIndex];
       const videoFrame = new VideoFrame(canvas, {
@@ -647,6 +647,7 @@ export default class VideoWorkerContext {
           masks.push(mask);
           tracklets.push(tracklet);
           colors.push(tracklet.color);
+          // colors.push("#FFFFFF");
         }
       });
       const effectActionPoint = this._currentSegmetationPoint;

@@ -13,24 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {OBJECT_TOOLBAR_INDEX} from '@/common/components/toolbar/ToolbarConfig';
 import Tooltip from '@/common/components/Tooltip';
+import { isFrameExtractionInProgressAtom } from '@/common/components/options/useDownloadVideo';
 import useVideo from '@/common/components/video/editor/useVideo';
-import {isPlayingAtom, streamingStateAtom, toolbarTabIndex} from '@/demo/atoms';
-import {PauseFilled, PlayFilledAlt} from '@carbon/icons-react';
-import {useAtomValue} from 'jotai';
-import {useCallback, useEffect} from 'react';
+import { isPlayingAtom, streamingStateAtom } from '@/demo/atoms'; // toolbarTabIndex
+import { PauseFilled, PlayFilledAlt } from '@carbon/icons-react';
+import { useAtomValue } from 'jotai';
+import { useCallback } from 'react';
 
 export default function PlaybackButton() {
-  const tabIndex = useAtomValue(toolbarTabIndex);
+  // const tabIndex = useAtomValue(toolbarTabIndex);
   const streamingState = useAtomValue(streamingStateAtom);
   const isPlaying = useAtomValue(isPlayingAtom);
+  const isFrameExtractionInProgress = useAtomValue(isFrameExtractionInProgressAtom);
   const video = useVideo();
 
+  // Disable the button during frame extraction 
+  // or when we're in a partial streaming state
   const isDisabled =
-    tabIndex === OBJECT_TOOLBAR_INDEX &&
-    streamingState !== 'none' &&
-    streamingState !== 'full';
+    isFrameExtractionInProgress ||
+    (streamingState === 'requesting' || streamingState === 'aborting');
 
   const handlePlay = useCallback(() => {
     video?.play();
@@ -51,24 +53,8 @@ export default function PlaybackButton() {
     }
   }, [isDisabled, isPlaying, handlePlay, handlePause]);
 
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      const callback = {
-        KeyK: handleClick,
-      }[event.code];
-      if (callback != null) {
-        event.preventDefault();
-        callback();
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [handleClick]);
-
   return (
-    <Tooltip message={`${isPlaying ? 'Pause' : 'Play'} (k)`}>
+    <Tooltip message={`${isPlaying ? 'Pause' : 'Play'}`}>
       <button
         disabled={isDisabled}
         className={`group !rounded-full !w-10 !h-10 flex items-center justify-center ${getButtonStyles(isDisabled)}`}

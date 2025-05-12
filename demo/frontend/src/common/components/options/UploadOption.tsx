@@ -70,7 +70,7 @@ export default function UploadOption({onUpload}: Props) {
             </>
           ) : (
             <>
-              Upload your own{' '}
+              Upload another video{' '}
               <div className="text-xs opacity-70">
                 Max {MAX_UPLOAD_FILE_SIZE}
               </div>

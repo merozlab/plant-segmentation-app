@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {spacing} from '@/theme/tokens.stylex';
+import { spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
-import {PropsWithChildren} from 'react';
+import { PropsWithChildren } from 'react';
 
 type Props = PropsWithChildren;
 
@@ -26,8 +26,8 @@ const styles = stylex.create({
     display: 'flex',
     justifyContent: 'stretch',
     alignItems: 'stretch',
-    gap: spacing[12],
-    paddingHorizontal: spacing[12],
+    gap: spacing[4],
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[4],
     '@media screen and (max-width: 768px)': {
       display: 'flex',
@@ -41,6 +41,6 @@ const styles = stylex.create({
   },
 });
 
-export default function DemoPageLayout({children}: Props) {
+export default function DemoPageLayout({ children }: Props) {
   return <div {...stylex.props(styles.container)}>{children}</div>;
 }

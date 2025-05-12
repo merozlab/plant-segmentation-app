@@ -16,19 +16,76 @@
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import ToolbarBottomActionsWrapper from '@/common/components/toolbar/ToolbarBottomActionsWrapper';
+import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import {
-  MORE_OPTIONS_TOOLBAR_INDEX,
+  DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import {ChevronRight} from '@carbon/icons-react';
+import { sessionAtom } from '@/demo/atoms';
+import { useAtomValue, useAtom } from 'jotai';
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+import { ChevronRight } from '@carbon/icons-react';
+import { masksReadyAtom } from '@/common/components/options/masksReadyAtom';
+import { useState } from 'react';
+import { originalFilePathAtom } from '@/demo/atoms';
+
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function EffectsToolbarBottomActions({onTabChange}: Props) {
-  function handleSwitchToMoreOptionsTab() {
-    onTabChange(MORE_OPTIONS_TOOLBAR_INDEX);
+export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
+  const session = useAtomValue(sessionAtom); // Get the current session
+  const originalFilePath = useAtomValue(originalFilePathAtom);
+  console.log('originalFilePath', originalFilePath);
+  const [, setMasksReady] = useAtom(masksReadyAtom); // We only need the setter here
+  const { enqueueMessage, clearMessage } = useMessagesSnackbar();
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function handleSwitchToMoreOptionsTab() {
+    if (!session?.id) {
+      // Use the predefined message for no active session
+      enqueueMessage('noActiveSession');
+      return;
+    }
+
+    setIsLoading(true); // Set loading state to true
+    // Show mask generation in-progress message
+    // enqueueMessage('maskGenerationStart');
+
+    try {
+      // Call the /maskify endpoint asynchronously
+      const response = await fetch(`${VIDEO_API_ENDPOINT}/maskify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Send zip: false as we only need the server to generate masks, not zip them for download yet
+        body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Maskify request failed: ${response.status} - ${errorText}`);
+      }
+      else {
+        setIsLoading(false); // Set loading state to false
+        // Clear the in-progress message
+        clearMessage();
+        // Show success message
+        // Set masks as ready
+        setMasksReady(true);
+        // Navigate to Download tab
+        onTabChange(DOWNLOAD_TOOLBAR_INDEX);
+      }
+    } catch (error) {
+      // Clear the in-progress message
+      clearMessage();
+      // Show error message
+      enqueueMessage('maskGenerationFailure');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -38,8 +95,9 @@ export default function EffectsToolbarBottomActions({onTabChange}: Props) {
       />
       <PrimaryCTAButton
         onClick={handleSwitchToMoreOptionsTab}
-        endIcon={<ChevronRight />}>
-        Next
+        endIcon={<ChevronRight />}
+        disabled={isLoading}>
+        {isLoading ? 'Generating...' : 'Next'}
       </PrimaryCTAButton>
     </ToolbarBottomActionsWrapper>
   );

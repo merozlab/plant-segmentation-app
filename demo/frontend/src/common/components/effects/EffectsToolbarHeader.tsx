@@ -42,8 +42,8 @@ export default function EffectsToolbarHeader() {
 
   return (
     <ToolbarHeaderWrapper
-      title="Add effects"
-      description="Apply visual effects to your selected objects and the background. Keeping clicking the same effect for different variations."
+      title="Mask Options"
+      description="Choose how you want the mask to look."
       bottomSection={
         <div className="flex mt-1">
           <Button

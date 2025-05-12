@@ -13,36 +13,100 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import RestartSessionButton from '@/common/components/session/RestartSessionButton';
+import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import {
-  EFFECT_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
+  CENTERLINE_TOOLBAR_INDEX, // Import the new index
 } from '@/common/components/toolbar/ToolbarConfig';
-import {ChevronLeft} from '@carbon/icons-react';
-import {Button} from 'react-daisyui';
+import { ChevronLeft, ChevronRight } from '@carbon/icons-react'; // Import ChevronRight
+import { Button } from 'react-daisyui';
 import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useState } from 'react'; // Import state to handle button loading state
+import { masksReadyAtom } from '@/common/components/options/masksReadyAtom'; // Import our mask readiness state
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom } from '@/demo/atoms';
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function MoreOptionsToolbarBottomActions({onTabChange}: Props) {
-  function handleReturnToEffectsTab() {
-    onTabChange(EFFECT_TOOLBAR_INDEX);
+export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) {
+  const [isLoading, setIsLoading] = useState(false);
+  const areMasksReady = useAtomValue(masksReadyAtom);
+  const session = useAtomValue(sessionAtom);
+  const [trackletObjects] = useAtom(trackletObjectsAtom);
+  const setCenterlinesMap = useSetAtom(centerlinesAtom);
+  const originalFilePath = useAtomValue(originalFilePathAtom);
+
+  function handleReturnToObjectsTab() {
+    onTabChange(OBJECT_TOOLBAR_INDEX);
+  }
+
+  // Make the handler async
+  async function handleSwitchToCenterlineTab() {
+    setIsLoading(true);
+    // helper to fetch PCA-computed centerlines and populate atom
+    async function fetchCenterlinesPCA() {
+      if (!session?.id) {
+        console.error('Missing session for centerline PCA');
+        return;
+      }
+      try {
+        const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath }),
+        });
+        if (!resp.ok) throw new Error(resp.statusText);
+        const data: Record<string, [number[], number[]][]> = await resp.json();
+        const mapping: Record<number, Record<number, [number, number][]>> = {};
+        Object.entries(data).forEach(([objName, frames]) => {
+          const idx = parseInt(objName.split('_')[1], 10) - 1;
+          const tracklet = trackletObjects[idx];
+          if (!tracklet) return;
+          const objMap: Record<number, [number, number][]> = {};
+          frames.forEach(([xs, ys], fi) => {
+            objMap[fi] = xs.map((x, i) => [x, ys[i]]);
+          });
+          mapping[tracklet.id] = objMap;
+        });
+        setCenterlinesMap(mapping);
+      } catch (e) {
+        console.error('Error fetching centerlines PCA:', e);
+      }
+    }
+    if (areMasksReady) {
+      await fetchCenterlinesPCA();
+      setIsLoading(false);
+      onTabChange(CENTERLINE_TOOLBAR_INDEX);
+    } else {
+      // retry after masks generation delay
+      setTimeout(async () => {
+        await fetchCenterlinesPCA();
+        setIsLoading(false);
+        onTabChange(CENTERLINE_TOOLBAR_INDEX);
+      }, 5000);
+    }
   }
 
   return (
     <ToolbarBottomActionsWrapper>
       <Button
         color="ghost"
-        onClick={handleReturnToEffectsTab}
+        onClick={handleReturnToObjectsTab}
+        disabled={isLoading}
         className="!px-4 !rounded-full font-medium text-white hover:bg-black"
         startIcon={<ChevronLeft />}>
         Edit effects
       </Button>
-      <RestartSessionButton
-        onRestartSession={() => onTabChange(OBJECT_TOOLBAR_INDEX)}
-      />
+      {/* Next button with loading state */}
+      <PrimaryCTAButton
+        onClick={handleSwitchToCenterlineTab}
+        endIcon={isLoading ? null : <ChevronRight />}
+        disabled={isLoading}>
+        {isLoading ? 'Getting centerlines...' : 'Next'}
+      </PrimaryCTAButton>
     </ToolbarBottomActionsWrapper>
   );
 }

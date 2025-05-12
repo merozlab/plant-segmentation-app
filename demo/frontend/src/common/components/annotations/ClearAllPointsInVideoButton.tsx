@@ -16,12 +16,12 @@
 import useRestartSession from '@/common/components/session/useRestartSession';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import useVideo from '@/common/components/video/editor/useVideo';
-import {isPlayingAtom, isStreamingAtom, labelTypeAtom} from '@/demo/atoms';
-import {Reset} from '@carbon/icons-react';
+import { isPlayingAtom, isStreamingAtom, labelTypeAtom } from '@/demo/atoms';
+import { Reset } from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
-import {useAtomValue, useSetAtom} from 'jotai';
-import {useState} from 'react';
-import {Button, Loading} from 'react-daisyui';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useState } from 'react';
+import { Button, Loading } from 'react-daisyui';
 
 const styles = stylex.create({
   container: {
@@ -34,30 +34,39 @@ type Props = {
   onRestart: () => void;
 };
 
-export default function ClearAllPointsInVideoButton({onRestart}: Props) {
+export default function ClearAllPointsInVideoButton({ onRestart }: Props) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const isPlaying = useAtomValue(isPlayingAtom);
   const isStreaming = useAtomValue(isStreamingAtom);
   const setLabelType = useSetAtom(labelTypeAtom);
-  const {clearMessage} = useMessagesSnackbar();
-  const {restartSession} = useRestartSession();
+  const { clearMessage } = useMessagesSnackbar();
+  const { restartSession } = useRestartSession();
 
   const video = useVideo();
 
   async function handleRestart() {
     if (video === null) {
+      console.log('Video is not available');
       return;
     }
 
     setIsLoading(true);
     if (isPlaying) {
+      console.log('Pausing video');
       video.pause();
     }
     if (isStreaming) {
+      console.log('Aborting stream masks');
       await video.abortStreamMasks();
     }
     const isSuccessful = await video.clearPointsInVideo();
+    if (isSuccessful) {
+      console.log('Points cleared successfully');
+    } else {
+      console.log('Failed to clear points');
+    }
     if (!isSuccessful) {
+      console.log('Restarting session due to failure');
       await restartSession();
     }
     video.frame = 0;

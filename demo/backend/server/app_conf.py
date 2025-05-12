@@ -15,11 +15,17 @@ API_URL = os.getenv("API_URL", "http://localhost:7263")
 
 MODEL_SIZE = os.getenv("MODEL_SIZE", "base_plus")
 
+# Feature flags
+# Set to "true" for local development, "false" for production
+IS_LOCAL_DEPLOYMENT = os.getenv("IS_LOCAL_DEPLOYMENT", "true").lower() == "true"
+
 logger.info(f"using model size {MODEL_SIZE}")
+logger.info(f"local deployment mode: {IS_LOCAL_DEPLOYMENT}")
 
 FFMPEG_NUM_THREADS = int(os.getenv("FFMPEG_NUM_THREADS", "1"))
 
 # Path for all data used in API
+# i guess this is where you would configure s3
 DATA_PATH = Path(os.getenv("DATA_PATH", "/data"))
 
 # Max duration an uploaded video can have in seconds. The default is 10

@@ -20,12 +20,12 @@ import {
   uploadingStateAtom,
   VideoData,
 } from '@/demo/atoms';
-import {spacing} from '@/theme/tokens.stylex';
-import {Close} from '@carbon/icons-react';
+import { spacing } from '@/theme/tokens.stylex';
+import { Close } from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
-import {useSetAtom} from 'jotai';
-import {ComponentType, useCallback, useRef} from 'react';
-import {Modal} from 'react-daisyui';
+import { useSetAtom } from 'jotai';
+import { ComponentType, useCallback, useRef } from 'react';
+import { Modal } from 'react-daisyui';
 import DemoVideoGallery from './DemoVideoGallery';
 
 const styles = stylex.create({
@@ -72,6 +72,7 @@ type Props = {
   onOpen?: () => void;
   onSelect?: (video: VideoData, isUpload?: boolean) => void;
   onUploadVideoError?: (error: Error) => void;
+  uploadOnly?: boolean;
 };
 
 export default function DemoVideoGalleryModal({
@@ -80,6 +81,7 @@ export default function DemoVideoGalleryModal({
   onOpen,
   onSelect,
   onUploadVideoError,
+  uploadOnly = false,
 }: Props) {
   const modalRef = useRef<HTMLDialogElement | null>(null);
 
@@ -122,6 +124,11 @@ export default function DemoVideoGalleryModal({
   function handleOpenVideoGalleryModal() {
     onOpen?.();
     openModal();
+  }
+
+  if (uploadOnly) {
+    // Only render the upload trigger, not the modal/gallery
+    return <VideoGalleryModalTrigger onClick={() => { }} />;
   }
 
   return (

@@ -13,18 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import GalleryOption from '@/common/components/options/GalleryOption';
 import UploadOption from '@/common/components/options/UploadOption';
-import {OBJECT_TOOLBAR_INDEX} from '@/common/components/toolbar/ToolbarConfig';
+import { OBJECT_TOOLBAR_INDEX } from '@/common/components/toolbar/ToolbarConfig';
 import useVideo from '@/common/components/video/editor/useVideo';
 import useScreenSize from '@/common/screen/useScreenSize';
+import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
 
 type Props = {
   onTabChange: (tabIndex: number) => void;
 };
 
-export default function TryAnotherVideoSection({onTabChange}: Props) {
-  const {isMobile} = useScreenSize();
+export default function TryAnotherVideoSection({ onTabChange }: Props) {
+  const { isMobile } = useScreenSize();
   const video = useVideo();
 
   function handleVideoChange() {
@@ -46,7 +46,7 @@ export default function TryAnotherVideoSection({onTabChange}: Props) {
             <UploadOption onUpload={handleVideoChange} />
           </div>
           <div className="flex-1">
-            <GalleryOption onChangeVideo={handleVideoChange} />
+            <DefaultVideoGalleryModalTrigger />
           </div>
         </div>
       </div>
@@ -55,12 +55,9 @@ export default function TryAnotherVideoSection({onTabChange}: Props) {
 
   return (
     <div className="px-8 pb-8">
-      <div className="font-medium text-gray-300 text-base">
-        Try another video
-      </div>
       <div className="flex flex-col gap-4 mt-4">
         <UploadOption onUpload={handleVideoChange} />
-        <GalleryOption onChangeVideo={handleVideoChange} />
+        {/* <GalleryOption onChangeVideo={handleVideoChange} /> */}
       </div>
     </div>
   );
