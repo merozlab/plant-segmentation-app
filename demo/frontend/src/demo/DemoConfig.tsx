@@ -20,9 +20,9 @@ type EffectLayers = {
   highlight: keyof Effects;
 };
 
-export const DEMO_SHORT_NAME = 'SAM 2 Demo';
+export const DEMO_SHORT_NAME = 'SAP';
 export const RESEARCH_BY_META_AI = 'By Meta FAIR';
-export const DEMO_FRIENDLY_NAME = 'Segment Anything 2 Demo';
+export const DEMO_FRIENDLY_NAME = 'Segment Any Plant';
 // export const VIDEO_WATERMARK_TEXT = `Modified with ${DEMO_FRIENDLY_NAME}`;
 export const VIDEO_WATERMARK_TEXT = '';
 export const PROJECT_GITHUB_URL =
@@ -51,7 +51,7 @@ export const UPLOADS_DIRECTORY = '/home/yasmine/alex/plant-segmentation-app/demo
  * Set to false for production/remote deployments where local file system 
  * access is not available or should be disabled for security reasons.
  */
-export const IS_LOCAL_DEPLOYMENT = true;
+export const IS_LOCAL_DEPLOYMENT = false;
 
 export const demoObjectLimit = 3;
 

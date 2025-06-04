@@ -15,17 +15,19 @@
  */
 import ActionButton from '@/common/components/button/ActionButton'; // Updated import
 import { useCallback, useState } from 'react';
-import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
+import { useAtomValue } from 'jotai';
+import { toolbarTabIndex, isFirstClickMadeAtom } from '@/demo/atoms';
 import useVideoEffect from '@/common/components/video/editor/useVideoEffect';
 import { EffectIndex } from '@/common/components/video/effects/Effects';
 import { WatsonHealth3DMprToggle } from '@carbon/icons-react';
 
 export default function ToggleEffectsButton() {
-    const [tabIndex] = useToolbarTabs();
+    const tabIndex = useAtomValue(toolbarTabIndex);
+    const isFirstClickMade = useAtomValue(isFirstClickMadeAtom);
 
-    // Disable the button during frame extraction 
-    // or when we're in a partial streaming state
-    const isDisabled = tabIndex < 1;
+    // When tabIndex == 0, enable only if at least one point has been selected
+    // For other tabs, use the previous logic (disable during frame extraction or partial streaming)
+    const isDisabled = tabIndex === 0 ? !isFirstClickMade : tabIndex < 1;
 
     const [effectMode, setEffectMode] = useState(0);
     const setEffect = useVideoEffect();

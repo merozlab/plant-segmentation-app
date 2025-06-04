@@ -21,7 +21,6 @@ import { sessionAtom, uploadingStateAtom, uploadErrorMessageAtom } from '@/demo/
 import { Close, CloudUpload } from '@carbon/icons-react';
 import { useSetAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
-import { IS_LOCAL_DEPLOYMENT, UPLOADS_DIRECTORY } from '@/demo/DemoConfig';
 
 export default function DefaultVideoGalleryModalTrigger() {
   const navigate = useNavigate();
@@ -39,16 +38,11 @@ export default function DefaultVideoGalleryModalTrigger() {
     setSession(null);
   };
 
-  // Use the enhanced useUploadVideo hook with local folder processing
   const {
     getRootProps,
     getInputProps,
     isUploading,
     error,
-    folderPath,
-    setFolderPath,
-    processLocalFolder,
-    isProcessingFolder
   } = useUploadVideo({
     onUpload: handleUpload,
     onUploadError: (error: Error) => {
@@ -60,12 +54,6 @@ export default function DefaultVideoGalleryModalTrigger() {
     },
     setGlobalErrorMessage: setUploadErrorMessage,
   });
-
-  // Simplified folder submission handler
-  const handleFolderSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    processLocalFolder(folderPath);
-  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -98,36 +86,6 @@ export default function DefaultVideoGalleryModalTrigger() {
         />
       </div>
 
-      {/* Only render the local folder section if IS_LOCAL_DEPLOYMENT is true */}
-      {IS_LOCAL_DEPLOYMENT && (
-        <>
-          <div className="divider text-sm opacity-70">OR</div>
-
-          <form onSubmit={handleFolderSubmit} className="flex flex-col gap-2">
-            <div className="text-sm mb-1">Place your folder in {UPLOADS_DIRECTORY}:</div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={folderPath}
-                onChange={(e: any) => setFolderPath(e.target.value)}
-                placeholder="Enter folder name"
-                className="input input-bordered text-secondary flex-grow w-full"
-                required
-              />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={isProcessingFolder || !folderPath.trim()}
-              >
-                {isProcessingFolder ? 'Processing...' : 'Process Folder'}
-              </button>
-            </div>
-            <div className="text-xs opacity-70">
-              The app will convert all image files to a video and upload it.
-            </div>
-          </form>
-        </>
-      )}
     </div>
   );
 }

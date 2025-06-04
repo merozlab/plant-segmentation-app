@@ -22,6 +22,8 @@ from mask_to_curvature import (
     get_centerline,
     get_contours,
     get_centerline_pca,
+    get_centerline_edge_pca,
+    get_centerline_skeletonize,
 )
 from pycocotools import mask as mask_util
 
@@ -97,6 +99,7 @@ def maskify() -> Response:
     base = UPLOADS_PATH / data["session_id"]
     # get original file names
     sfn = data.get("safe_folder_name", None)
+    erode = data.get("erode", False)
     original_file_names = get_original_filenames(sfn) if sfn else None
     print("original_file_names", original_file_names)
     # Collect all JSON files and sort by frame index
@@ -139,6 +142,10 @@ def maskify() -> Response:
                 # Fallback to using the index
                 output_filename = f"{idx+1:05d}_mask.bmp"
             output_path = object_dirs[obj_idx] / output_filename
+            # Erode 1px from the outline of the contour
+            if erode:
+                kernel = np.ones((3, 3), np.uint8)
+                bw_mask = cv2.erode(bw_mask, kernel, iterations=1)
             cv2.imwrite(str(output_path), bw_mask)
 
     return make_response(
@@ -202,6 +209,7 @@ def centerlines_pca() -> Response:
     data = request.json
     session_id = data["session_id"]
     sfn = data.get("safe_folder_name", None)
+    n_points = data.get("n_points", 100)  # Default to 100 points
     original_file_names = get_original_filenames(sfn) if sfn else None
 
     base = UPLOADS_PATH / session_id
@@ -216,9 +224,21 @@ def centerlines_pca() -> Response:
     # Compute centerlines for each object asynchronously save CSVs
     for object_dir in masks_dir.iterdir():
         if object_dir.is_dir():
-            response[object_dir.name] = [
-                get_centerline_pca(frame) for frame in sorted(object_dir.glob("*.bmp"))
-            ]
+            if data.get("pca_algorithm") == "edge":
+                response[object_dir.name] = [
+                    get_centerline_edge_pca(frame, n_points=n_points)
+                    for frame in sorted(object_dir.glob("*.bmp"))
+                ]
+            elif data.get("pca_algorithm") == "skeletonize":
+                response[object_dir.name] = [
+                    get_centerline_skeletonize(frame, n_points=n_points)
+                    for frame in sorted(object_dir.glob("*.bmp"))
+                ]
+            else:
+                response[object_dir.name] = [
+                    get_centerline_pca(frame, n_points=n_points)
+                    for frame in sorted(object_dir.glob("*.bmp"))
+                ]
 
     # Asynchronously save CSVs for each object
     def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):

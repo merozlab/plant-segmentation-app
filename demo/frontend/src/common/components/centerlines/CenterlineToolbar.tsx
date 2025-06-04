@@ -23,12 +23,13 @@ import {
   DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { sessionAtom } from '@/demo/atoms';
-import { useAtomValue } from 'jotai';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom } from '@/demo/atoms';
+import { useAtomValue, useAtom, useSetAtom } from 'jotai';
 // import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
 import OptionButton from '@/common/components/options/OptionButton';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+import { useState, useCallback, useRef, useEffect } from 'react';
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
@@ -36,13 +37,89 @@ type Props = {
 
 export default function CenterlineToolbar({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom);
+  const trackletObjects = useAtomValue(trackletObjectsAtom);
+  const originalFilePath = useAtomValue(originalFilePathAtom);
+  const setCenterlinesMap = useSetAtom(centerlinesAtom);
+  const [centerlineAlgorithm, setCenterlineAlgorithm] = useAtom(centerlineAlgorithmAtom);
+  const [centerlinePoints, setCenterlinePoints] = useAtom(centerlinePointsAtom);
   const { enqueueMessage } = useMessagesSnackbar();
+  const [isLoading, setIsLoading] = useState(false);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleBack = () => {
     onTabChange(DOWNLOAD_TOOLBAR_INDEX); // Go back to More Options tab (index 2)
   };
 
-  const isLoading = false; // Replace with actual loading state
+  // Function to fetch centerlines with the selected algorithm
+  const fetchCenterlinesPCA = useCallback(async (algorithm: 'edge' | 'full' | 'skeletonize') => {
+    if (!session?.id) {
+      console.error('Missing session for centerline PCA');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: session.id,
+          safe_folder_name: originalFilePath,
+          pca_algorithm: algorithm,
+          n_points: centerlinePoints
+        }),
+      });
+      if (!resp.ok) throw new Error(resp.statusText);
+      const data: Record<string, [number[], number[]][]> = await resp.json();
+      const mapping: Record<number, Record<number, [number, number][]>> = {};
+      Object.entries(data).forEach(([objName, frames]) => {
+        const idx = parseInt(objName.split('_')[1], 10) - 1;
+        const tracklet = trackletObjects[idx];
+        if (!tracklet) return;
+        const objMap: Record<number, [number, number][]> = {};
+        frames.forEach(([xs, ys], fi) => {
+          objMap[fi] = xs.map((x, i) => [x, ys[i]]);
+        });
+        mapping[tracklet.id] = objMap;
+      });
+      setCenterlinesMap(mapping);
+    } catch (e) {
+      console.error('Error fetching centerlines PCA:', e);
+      enqueueMessage('centerlineDownloadError');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session?.id, originalFilePath, trackletObjects, setCenterlinesMap, enqueueMessage, centerlinePoints]);
+
+  // Handle algorithm change
+  const handleAlgorithmChange = useCallback(async (newAlgorithm: 'edge' | 'full' | 'skeletonize') => {
+    setCenterlineAlgorithm(newAlgorithm);
+    await fetchCenterlinesPCA(newAlgorithm);
+  }, [setCenterlineAlgorithm, fetchCenterlinesPCA]);
+
+  // Handle points change with debouncing
+  const handlePointsChange = useCallback((newPoints: number) => {
+    setCenterlinePoints(newPoints);
+
+    // Clear existing timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    // Set new timeout to fetch centerlines after user stops typing
+    debounceTimeoutRef.current = setTimeout(() => {
+      fetchCenterlinesPCA(centerlineAlgorithm);
+    }, 2000);
+  }, [setCenterlinePoints, fetchCenterlinesPCA, centerlineAlgorithm]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
+  }, []);
+
   async function handleGetCenterlines() {
     if (!session) {
       console.error('Session ID is null in handleGetCenterlines');
@@ -90,9 +167,87 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
 
       <ToolbarHeaderWrapper
         title="Centerline Extraction"
-        description="Set base points for each object to extract centerlines."
+        description="Choose algorithm and extract centerline"
         className="pb-4"
       />
+
+      {/* Algorithm Selection */}
+      <div className="p-5 md:p-8 border-b border-graydark-600">
+        <div className="flex flex-col gap-3">
+          <label className="text-white text-sm font-medium">Algorithm Selection</label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="centerlineAlgorithm"
+              value="edge"
+              checked={centerlineAlgorithm === 'edge'}
+              onChange={() => handleAlgorithmChange('edge')}
+              className="radio radio-primary"
+              disabled={isLoading}
+            />
+            <div className="flex flex-col">
+              <span className="text-white font-medium">Edge PCA</span>
+              <span className="text-gray-400 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
+            </div>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="centerlineAlgorithm"
+              value="full"
+              checked={centerlineAlgorithm === 'full'}
+              onChange={() => handleAlgorithmChange('full')}
+              className="radio radio-primary"
+              disabled={isLoading}
+            />
+            <div className="flex flex-col">
+              <span className="text-white font-medium">PCA</span>
+              <span className="text-gray-400 text-sm">Breaks the mask into parts along the principal axis and finds the centroid of each part</span>
+            </div>
+          </label>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="radio"
+              name="centerlineAlgorithm"
+              value="skeletonize"
+              checked={centerlineAlgorithm === 'skeletonize'}
+              onChange={() => handleAlgorithmChange('skeletonize')}
+              className="radio radio-primary"
+              disabled={isLoading}
+            />
+            <div className="flex flex-col">
+              <span className="text-white font-medium">Skeletonize</span>
+              <span className="text-gray-400 text-sm">Morphological skeleton extraction using scikit-image</span>
+            </div>
+          </label>
+        </div>
+        {isLoading && (
+          <div className="mt-4 text-center">
+            <div className="loading loading-spinner loading-sm"></div>
+            <span className="ml-2 text-gray-400">Updating centerlines...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Number of Points Input */}
+      <div className="p-5 md:p-8 border-b border-graydark-600">
+        <div className="flex flex-col gap-2">
+          <label className="text-white text-sm font-medium">Number of points</label>
+          <input
+            type="number"
+            value={centerlinePoints}
+            onChange={(e) => {
+              const value = Math.max(50, parseInt(e.target.value) || 50);
+              handlePointsChange(value);
+            }}
+            min={50}
+            max={500}
+            className="input input-bordered w-full max-w-xs bg-graydark-700 text-white border-graydark-500 focus:border-primary"
+            disabled={isLoading}
+          />
+          <span className="text-gray-400 text-xs">Minimum 50 points</span>
+        </div>
+      </div>
 
       {/* <div className="grow p-5 false overflow-y-auto">
         {trackletObjects.map((obj, index) => {
