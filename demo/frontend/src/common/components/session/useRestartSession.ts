@@ -23,9 +23,15 @@ import {
   isStreamingAtom,
   labelTypeAtom,
   trackletObjectsAtom,
+  isLengthScaleEnabledAtom,
+  lengthScaleStartPointAtom,
+  lengthScaleEndPointAtom,
+  isLengthScaleSetAtom,
+  centerlineUnitsAtom,
+  erodeBorderAtom,
 } from '@/demo/atoms';
-import {useAtomValue, useSetAtom} from 'jotai';
-import {useState} from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useState } from 'react';
 
 export default function useRestartSession() {
   const [isLoading, setIsLoading] = useState<boolean>();
@@ -35,9 +41,15 @@ export default function useRestartSession() {
   const setTracklets = useSetAtom(trackletObjectsAtom);
   const setLabelType = useSetAtom(labelTypeAtom);
   const setMasksReady = useSetAtom(masksReadyAtom); // Add setter for masksReadyAtom
-  const {clearMessage} = useMessagesSnackbar();
+  const setIsLengthScaleEnabled = useSetAtom(isLengthScaleEnabledAtom);
+  const setLengthScaleStartPoint = useSetAtom(lengthScaleStartPointAtom);
+  const setLengthScaleEndPoint = useSetAtom(lengthScaleEndPointAtom);
+  const setIsLengthScaleSet = useSetAtom(isLengthScaleSetAtom);
+  const setCenterlineUnits = useSetAtom(centerlineUnitsAtom);
+  const setErodeBorder = useSetAtom(erodeBorderAtom);
+  const { clearMessage } = useMessagesSnackbar();
 
-  const {inputVideo} = useInputVideo();
+  const { inputVideo } = useInputVideo();
   const video = useVideo();
 
   async function restartSession(onRestart?: () => void) {
@@ -58,10 +70,16 @@ export default function useRestartSession() {
     setTracklets([]);
     setLabelType('positive');
     setMasksReady(false); // Reset masks ready state when session is restarted
+    setIsLengthScaleEnabled(false);
+    setLengthScaleStartPoint(null);
+    setLengthScaleEndPoint(null);
+    setIsLengthScaleSet(false);
+    setCenterlineUnits('pixels');
+    setErodeBorder(false);
     onRestart?.();
     clearMessage();
     setIsLoading(false);
   }
 
-  return {isLoading, restartSession};
+  return { isLoading, restartSession };
 }

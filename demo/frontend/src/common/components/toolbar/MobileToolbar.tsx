@@ -22,7 +22,7 @@ type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function MobileToolbar({tabIndex, onTabChange}: Props) {
+export default function MobileToolbar({ tabIndex, onTabChange }: Props) {
   const tabs = [
     <MobileObjectsToolbar key="objects" onTabChange={onTabChange} />,
     <MobileEffectsToolbar key="effects" onTabChange={onTabChange} />,

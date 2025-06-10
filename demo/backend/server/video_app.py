@@ -15,6 +15,7 @@ import os
 import numpy as np
 import cv2
 import re
+import pandas as pd
 
 from mask_to_curvature import (
     centerlines_to_df,
@@ -22,6 +23,8 @@ from mask_to_curvature import (
     get_centerline,
     get_contours,
     get_centerline_pca,
+    get_centerline_edge_pca,
+    get_centerline_skeletonize,
 )
 from pycocotools import mask as mask_util
 
@@ -150,14 +153,57 @@ def zip_masks() -> Response:
     """
     Zip all files in a directory.
     """
-    session_id = request.json["session_id"]
+    data = request.json
+    session_id = data["session_id"]
+    erode = data.get("erode", False)
+
     base = UPLOADS_PATH / session_id
     directory = base / "masks"
     zip_name = session_id + "_masks.zip"
-    with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+
+    if erode:
+        # Create a temporary directory for eroded masks
+        eroded_dir = base / "masks_eroded"
+        eroded_dir.mkdir(exist_ok=True)
+
+        # Process each mask file and apply erosion
         for file in directory.rglob("*"):
-            if file.is_file():
-                zipf.write(file, str(file.relative_to(directory)))
+            if file.is_file() and file.suffix.lower() in [
+                ".bmp",
+                ".jpg",
+                ".jpeg",
+                ".png",
+            ]:
+                # Read the image
+                img = cv2.imread(str(file), cv2.IMREAD_GRAYSCALE)
+                if img is not None:
+                    # Apply erosion
+                    kernel = np.ones((3, 3), np.uint8)
+                    eroded_img = cv2.erode(img, kernel, iterations=1)
+
+                    # Save to eroded directory maintaining folder structure
+                    relative_path = file.relative_to(directory)
+                    eroded_file_path = eroded_dir / relative_path
+                    eroded_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(eroded_file_path), eroded_img)
+
+        # Create zip from eroded directory
+        with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file in eroded_dir.rglob("*"):
+                if file.is_file():
+                    zipf.write(file, str(file.relative_to(eroded_dir)))
+
+        # Clean up temporary directory
+        import shutil
+
+        shutil.rmtree(eroded_dir)
+    else:
+        # Original behavior - no erosion
+        with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file in directory.rglob("*"):
+                if file.is_file():
+                    zipf.write(file, str(file.relative_to(directory)))
+
     # Send the zip file
     return send_from_directory(
         directory=str(base),
@@ -201,6 +247,7 @@ def centerlines_pca() -> Response:
     data = request.json
     session_id = data["session_id"]
     sfn = data.get("safe_folder_name", None)
+    n_points = data.get("n_points", 100)  # Default to 100 points
     original_file_names = get_original_filenames(sfn) if sfn else None
 
     base = UPLOADS_PATH / session_id
@@ -215,9 +262,21 @@ def centerlines_pca() -> Response:
     # Compute centerlines for each object asynchronously save CSVs
     for object_dir in masks_dir.iterdir():
         if object_dir.is_dir():
-            response[object_dir.name] = [
-                get_centerline_pca(frame) for frame in sorted(object_dir.glob("*.bmp"))
-            ]
+            if data.get("pca_algorithm") == "edge":
+                response[object_dir.name] = [
+                    get_centerline_edge_pca(frame, n_points=n_points)
+                    for frame in sorted(object_dir.glob("*.bmp"))
+                ]
+            elif data.get("pca_algorithm") == "skeletonize":
+                response[object_dir.name] = [
+                    get_centerline_skeletonize(frame, n_points=n_points)
+                    for frame in sorted(object_dir.glob("*.bmp"))
+                ]
+            else:
+                response[object_dir.name] = [
+                    get_centerline_pca(frame, n_points=n_points)
+                    for frame in sorted(object_dir.glob("*.bmp"))
+                ]
 
     # Asynchronously save CSVs for each object
     def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):
@@ -228,6 +287,7 @@ def centerlines_pca() -> Response:
             csv_dir = base_path / "centerlines"
             csv_dir.mkdir(parents=True, exist_ok=True)
             for obj, df in centerlines_df.items():
+                df = df.rename({"x": "x (pixels)", "y": "y (pixels)"}, axis=1)
                 df.to_csv(csv_dir / f"{obj}.csv", index=False)
             # After CSVs are written, zip the centerlines folder
             try:
@@ -255,16 +315,90 @@ def centerlines_pca() -> Response:
 def centerline_zip() -> Response:
     data = request.json
     session_id = data["session_id"]
+    units = data.get("units", "pixels")  # Default to pixels
+    pixels_to_meters_ratio = data.get("pixels_to_meters_ratio", None)
+
+    # Validate that if meters are requested, we have a conversion ratio
+    if units == "meters" and (
+        pixels_to_meters_ratio is None or pixels_to_meters_ratio <= 0
+    ):
+        return make_response(
+            "Invalid or missing pixels_to_meters_ratio for meter units", 400
+        )
+
     base = UPLOADS_PATH / session_id
-    # Load the JSON file with mask data
     if not base.exists():
         return make_response("Session not found", 404)
-    zip_name = f"{base.name}_centerlines.zip"
-    return send_from_directory(
-        directory=str(base),
-        path=zip_name,
-        as_attachment=True,
-    )
+
+    centerlines_dir = base / "centerlines"
+    if not centerlines_dir.exists():
+        return make_response("Centerlines not found", 404)
+
+    # If units are meters and we have a conversion ratio, create converted CSV files
+    if units == "meters" and pixels_to_meters_ratio is not None:
+        converted_dir = None
+        try:
+            # Create a temporary directory for converted CSV files
+            converted_dir = base / "centerlines_meters"
+            converted_dir.mkdir(exist_ok=True)
+
+            # Process each CSV file
+            for csv_file in centerlines_dir.glob("*.csv"):
+                df = pd.read_csv(csv_file)
+
+                # Convert pixel coordinates to meters
+                if "x (pixels)" in df.columns:
+                    df["x (meters)"] = df["x (pixels)"] * pixels_to_meters_ratio
+                    df = df.drop(columns=["x (pixels)"])
+
+                if "y (pixels)" in df.columns:
+                    df["y (meters)"] = df["y (pixels)"] * pixels_to_meters_ratio
+                    df = df.drop(columns=["y (pixels)"])
+
+                # Save converted CSV
+                converted_csv_path = converted_dir / csv_file.name
+                df.to_csv(converted_csv_path, index=False)
+
+            # Create zip file with converted CSVs
+            zip_name = f"{base.name}_centerlines_meters.zip"
+            zip_path = base / zip_name
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for file in converted_dir.glob("*.csv"):
+                    zipf.write(file, str(file.relative_to(converted_dir)))
+
+            return send_from_directory(
+                directory=str(base),
+                path=zip_name,
+                as_attachment=True,
+            )
+        except Exception as e:
+            logger.error(f"Error converting centerlines to meters: {e}")
+            return make_response("Error converting to meters", 500)
+        finally:
+            # Clean up temporary directory
+            if converted_dir and converted_dir.exists():
+                import shutil
+
+                try:
+                    shutil.rmtree(converted_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary directory: {e}")
+    else:
+        # Return original pixel-based zip file
+        zip_name = f"{base.name}_centerlines.zip"
+        zip_path = base / zip_name
+
+        # If the zip file doesn't exist, create it from the centerlines directory
+        if not zip_path.exists():
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for file in centerlines_dir.glob("*.csv"):
+                    zipf.write(file, str(file.relative_to(centerlines_dir)))
+
+        return send_from_directory(
+            directory=str(base),
+            path=zip_name,
+            as_attachment=True,
+        )
 
 
 PROCESSING_STATUS: Dict[str, Dict[str, Any]] = {}

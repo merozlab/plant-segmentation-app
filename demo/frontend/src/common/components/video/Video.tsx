@@ -84,6 +84,13 @@ type Props = {
   createVideoWorker?: () => Worker;
 };
 
+export type LengthScale = {
+  points: [start: SegmentationPoint, end: SegmentationPoint];
+  length: number;
+  pixelsPerUnit: number;
+  unit: string;
+};
+
 export type VideoRef = {
   getCanvas(): HTMLCanvasElement | null;
   get width(): number;

@@ -13,29 +13,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {Archive} from '@carbon/icons-react';
+import { Archive } from '@carbon/icons-react';
 import OptionButton from './OptionButton';
 import useDownloadVideo from './useDownloadVideo';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { masksReadyAtom } from './masksReadyAtom';
+import { erodeBorderAtom } from '@/demo/atoms';
 import Tooltip from '@/common/components/Tooltip';
 
 export default function DownloadFramesOption() {
-  const {download, state} = useDownloadVideo();
+  const { download, state } = useDownloadVideo();
   const masksReady = useAtomValue(masksReadyAtom); // Get the mask readiness state
+  const [erodeBorder, setErodeBorder] = useAtom(erodeBorderAtom);
 
   // Conditionally render with tooltip if masks aren't ready
   const buttonElement = (
-    <OptionButton
-      title="Download Masks"
-      Icon={Archive}
-      isDisabled={!masksReady}
-      loadingProps={{
-        loading: state === 'started' || state === 'encoding',
-        label: 'Extracting frames...',
-      }}
-      onClick={() => download(true, 'frames')}
-    />
+    <div className="flex flex-col gap-2">
+      <OptionButton
+        title="Download Masks"
+        Icon={Archive}
+        isDisabled={!masksReady}
+        loadingProps={{
+          loading: state === 'started' || state === 'encoding',
+          label: 'Extracting frames...',
+        }}
+        onClick={() => download(true, 'frames')}
+      />
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="erodeBorder"
+          checked={erodeBorder}
+          onChange={(e) => setErodeBorder(e.target.checked)}
+          className="checkbox checkbox-primary checkbox-sm"
+          disabled={!masksReady}
+        />
+        <label htmlFor="erodeBorder" className="text-sm text-white cursor-pointer">
+          Erode border
+        </label>
+      </div>
+    </div>
   );
 
   // If masks aren't ready, wrap in a tooltip explaining why it's disabled

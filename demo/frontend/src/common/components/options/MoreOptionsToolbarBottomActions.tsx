@@ -15,7 +15,7 @@
  */
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import {
-  OBJECT_TOOLBAR_INDEX,
+  LENGTH_SCALE_TOOLBAR_INDEX,
   CENTERLINE_TOOLBAR_INDEX, // Import the new index
 } from '@/common/components/toolbar/ToolbarConfig';
 import { ChevronLeft, ChevronRight } from '@carbon/icons-react'; // Import ChevronRight
@@ -24,7 +24,7 @@ import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react'; // Import state to handle button loading state
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom'; // Import our mask readiness state
-import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom } from '@/demo/atoms';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom } from '@/demo/atoms';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 
 type Props = {
@@ -38,9 +38,11 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
   const [trackletObjects] = useAtom(trackletObjectsAtom);
   const setCenterlinesMap = useSetAtom(centerlinesAtom);
   const originalFilePath = useAtomValue(originalFilePathAtom);
+  const centerlineAlgorithm = useAtomValue(centerlineAlgorithmAtom);
+  const centerlinePoints = useAtomValue(centerlinePointsAtom);
 
-  function handleReturnToObjectsTab() {
-    onTabChange(OBJECT_TOOLBAR_INDEX);
+  function handleReturnToLengthScaleTab() {
+    onTabChange(LENGTH_SCALE_TOOLBAR_INDEX);
   }
 
   // Make the handler async
@@ -56,7 +58,7 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
         const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath }),
+          body: JSON.stringify({ session_id: session.id, safe_folder_name: originalFilePath, pca_algorithm: centerlineAlgorithm, n_points: centerlinePoints }),
         });
         if (!resp.ok) throw new Error(resp.statusText);
         const data: Record<string, [number[], number[]][]> = await resp.json();
@@ -94,11 +96,11 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
     <ToolbarBottomActionsWrapper>
       <Button
         color="ghost"
-        onClick={handleReturnToObjectsTab}
+        onClick={handleReturnToLengthScaleTab}
         disabled={isLoading}
         className="!px-4 !rounded-full font-medium text-white hover:bg-black"
         startIcon={<ChevronLeft />}>
-        Edit effects
+        Length Scale
       </Button>
       {/* Next button with loading state */}
       <PrimaryCTAButton

@@ -14,5 +14,6 @@
  * limitations under the License.
  */
 export const OBJECT_TOOLBAR_INDEX = 0;
-export const DOWNLOAD_TOOLBAR_INDEX = 1;
-export const CENTERLINE_TOOLBAR_INDEX = 2;
+export const LENGTH_SCALE_TOOLBAR_INDEX = 1;
+export const DOWNLOAD_TOOLBAR_INDEX = 2;
+export const CENTERLINE_TOOLBAR_INDEX = 3;

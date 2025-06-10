@@ -35,7 +35,8 @@ RUN pip install werkzeug==2.2.3 \
     iopath>=0.1.10 \
     pillow>=9.4.0 \
     scipy>=1.14.1 \
-    pandas>=2.0.3
+    pandas>=2.0.3 \
+    scikit-image>=0.25.2
 
 # Make app directory
 RUN mkdir -p ${APP_ROOT}/server

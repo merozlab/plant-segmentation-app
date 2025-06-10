@@ -19,3 +19,4 @@ poetry.lock
 __pypackages__/
 
 node_modules/
+demo/backend/server/test.ipynb

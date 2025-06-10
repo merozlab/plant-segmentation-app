@@ -17,7 +17,7 @@ import TrackletsAnnotation from '@/common/components/annotations/TrackletsAnnota
 import useCloseSessionBeforeUnload from '@/common/components/session/useCloseSessionBeforeUnload';
 import MessagesSnackbar from '@/common/components/snackbar/MessagesSnackbar';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
-import { CENTERLINE_TOOLBAR_INDEX, OBJECT_TOOLBAR_INDEX } from '@/common/components/toolbar/ToolbarConfig';
+import { CENTERLINE_TOOLBAR_INDEX, OBJECT_TOOLBAR_INDEX, LENGTH_SCALE_TOOLBAR_INDEX } from '@/common/components/toolbar/ToolbarConfig';
 import useToolbarTabs from '@/common/components/toolbar/useToolbarTabs';
 import VideoFilmstripWithPlayback from '@/common/components/video/VideoFilmstripWithPlayback';
 import {
@@ -31,6 +31,7 @@ import useResetDemoEditor from '@/common/components/video/editor/useResetEditor'
 import useVideo from '@/common/components/video/editor/useVideo';
 import InteractionLayer from '@/common/components/video/layers/InteractionLayer';
 import { PointsLayer } from '@/common/components/video/layers/PointsLayer';
+import { LengthScaleLayer } from '@/common/components/lengthscale/LengthScaleLayer';
 // import { BasePointsLayer } from '@/common/components/video/layers/BasePointsLayer';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
@@ -51,9 +52,13 @@ import {
   activeTrackletObjectIdAtom,
   frameIndexAtom,
   isAddObjectEnabledAtom,
+  isLengthScaleEnabledAtom,
   isPlayingAtom,
   isVideoLoadingAtom,
   pointsAtom,
+  LengthScalePoint,
+  lengthScaleStartPointAtom,
+  lengthScaleEndPointAtom,
   // basePointsAtom,
   sessionAtom,
   streamingStateAtom,
@@ -123,6 +128,9 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
 
   const setFrameIndex = useSetAtom(frameIndexAtom);
   const points = useAtomValue(pointsAtom);
+  const [lengthScaleStartPoint, setLengthScaleStartPoint] = useAtom(lengthScaleStartPointAtom);
+  const [lengthScaleEndPoint, setLengthScaleEndPoint] = useAtom(lengthScaleEndPointAtom);
+  const isLengthScaleEnabled = useAtomValue(isLengthScaleEnabledAtom);
   // const [basePoints, setBasePoints] = useAtom(basePointsAtom);
   // Cache of computed centerlines per object per frame
   const isAddObjectEnabled = useAtomValue(isAddObjectEnabledAtom);
@@ -239,6 +247,17 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     handleOptimisticPointUpdate([...points, point]);
   }
 
+  function handleRemovePoint(point: SegmentationPoint) {
+    if (
+      isPlaying ||
+      streamingState === 'partial' ||
+      streamingState === 'requesting'
+    ) {
+      return;
+    }
+
+    handleOptimisticPointUpdate(points.filter(p => p !== point));
+  }
   // async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint) {
   //   if (session == null) {
   //     return;
@@ -335,9 +354,69 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   //     console.error('Centerline fetch error', e);
   //   }
   // }
+  // Length scale doesn't need optimistic updates like tracklets
+  // The state is managed directly through atoms
+  function handleOptimisticLengthScalePointUpdate(_point: LengthScalePoint) {
+    // This function is kept for consistency but doesn't need to do anything
+    // since length scale points are managed directly through atoms
+    // and don't require backend communication for point updates
+  }
 
 
-  function handleRemovePoint(point: SegmentationPoint) {
+
+
+  // // Convert SegmentationPoint to LengthScalePoint (remove the label)
+  // const lengthScalePoint: LengthScalePoint = [point[0], point[1]];
+
+  // // Don't add points if we already have both
+  // if (lengthScaleStartPoint && lengthScaleEndPoint) {
+  //   return;
+  // }
+
+  // if (!lengthScaleStartPoint) {
+  //   setLengthScaleStartPoint(lengthScalePoint);
+  // } else if (!lengthScaleEndPoint) {
+  //   setLengthScaleEndPoint(lengthScalePoint);
+  // }
+  // Handle length scale point addition
+  function handleAddLengthScalePoint(point: SegmentationPoint) {
+    if (!isLengthScaleEnabled) {
+      return;
+    }
+    if (streamingState === 'partial' || streamingState === 'requesting') {
+      return;
+    }
+    if (isPlaying) {
+      video?.pause();
+      // Continue to add the point instead of returning early
+    }
+
+    // Convert SegmentationPoint to LengthScalePoint (remove the label)
+    const lengthScalePoint: LengthScalePoint = [point[0], point[1]];
+
+    if (lengthScaleStartPoint && lengthScaleEndPoint) {
+      // If both points are already set, do not add a new point
+      return;
+    }
+    // If we already have a start point, set the end point
+    if (lengthScaleStartPoint && !lengthScaleEndPoint) {
+      setLengthScaleEndPoint(lengthScalePoint);
+      handleOptimisticLengthScalePointUpdate(lengthScalePoint);
+      return;
+    }
+    // If we only have the end point, set the start point
+    if (lengthScaleEndPoint && !lengthScaleStartPoint) {
+      setLengthScaleStartPoint(lengthScalePoint);
+      handleOptimisticLengthScalePointUpdate(lengthScalePoint);
+      return;
+    }
+    // If we have neither, set the start point
+    setLengthScaleStartPoint(lengthScalePoint);
+    handleOptimisticLengthScalePointUpdate(lengthScalePoint);
+  }
+
+  // Handle length scale point removal
+  function handleRemoveLengthScalePoint(point: LengthScalePoint) {
     if (
       isPlaying ||
       streamingState === 'partial' ||
@@ -345,7 +424,17 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     ) {
       return;
     }
-    handleOptimisticPointUpdate(points.filter(p => p !== point));
+
+    // Remove the point that matches the clicked coordinates
+    if (lengthScaleStartPoint &&
+      lengthScaleStartPoint[0] === point[0] &&
+      lengthScaleStartPoint[1] === point[1]) {
+      setLengthScaleStartPoint(null);
+    } else if (lengthScaleEndPoint &&
+      lengthScaleEndPoint[0] === point[0] &&
+      lengthScaleEndPoint[1] === point[1]) {
+      setLengthScaleEndPoint(null);
+    }
   }
 
   // async function handleOptimisticRemoveBasePointUpdate(point: SegmentationPoint) {
@@ -405,6 +494,20 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
             key="points-layer"
             points={points}
             onRemovePoint={handleRemovePoint}
+          />
+        </>
+      )}
+      {tabIndex === LENGTH_SCALE_TOOLBAR_INDEX && (
+        <>
+          <InteractionLayer
+            key="length-scale-interaction-layer"
+            onPoint={point => handleAddLengthScalePoint(point)}
+          />
+          <LengthScaleLayer
+            key="length-scale-layer"
+            startPoint={lengthScaleStartPoint}
+            endPoint={lengthScaleEndPoint}
+            onRemovePoint={handleRemoveLengthScalePoint}
           />
         </>
       )}
