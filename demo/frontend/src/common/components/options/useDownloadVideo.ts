@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {getFileName} from '@/common/components/options/ShareUtils';
+import { getFileName } from '@/common/components/options/ShareUtils';
 import {
   EncodingCompletedEvent,
   EncodingStateUpdateEvent,
 } from '@/common/components/video/VideoWorkerBridge';
 import useMessagesSnackbar from '@/common/components/snackbar/useMessagesSnackbar';
 import useVideo from '@/common/components/video/editor/useVideo';
-import {MP4ArrayBuffer} from 'mp4box';
-import {useState} from 'react';
-import {atom, useAtom, useAtomValue} from 'jotai'; // Import useAtomValue
-import { sessionAtom } from '@/demo/atoms'; // Import sessionAtom
+import { MP4ArrayBuffer } from 'mp4box';
+import { useState } from 'react';
+import { atom, useAtom, useAtomValue } from 'jotai'; // Import useAtomValue
+import { sessionAtom, erodeBorderAtom } from '@/demo/atoms'; // Import sessionAtom and erodeBorderAtom
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig'; // Import the constant
 
 type DownloadingState = 'default' | 'started' | 'encoding' | 'completed';
@@ -50,6 +50,7 @@ export default function useDownloadVideo(): State {
   const [, setFrameExtractionInProgress] = useAtom(isFrameExtractionInProgressAtom);
   const { enqueueMessage, clearMessage } = useMessagesSnackbar();
   const session = useAtomValue(sessionAtom); // Get session state
+  const erodeBorder = useAtomValue(erodeBorderAtom); // Get erode border state
 
   const video = useVideo();
 
@@ -147,7 +148,10 @@ export default function useDownloadVideo(): State {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ session_id: sessionId }),
+        body: JSON.stringify({
+          session_id: sessionId,
+          erode: erodeBorder
+        }),
       });
 
       setProgress(70); // Progress after fetch call initiated
@@ -215,5 +219,5 @@ export default function useDownloadVideo(): State {
     }
   }
 
-  return {download, progress, state: downloadingState};
+  return { download, progress, state: downloadingState };
 }

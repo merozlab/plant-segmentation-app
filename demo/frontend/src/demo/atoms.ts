@@ -246,3 +246,9 @@ export const pixelsToMetersRatioAtom = atom<number | null>(get => {
 export const isLengthScaleSetAtom = atom<boolean>(false);
 
 // #####################
+// Mask Download Options
+// #####################
+
+export const erodeBorderAtom = atom<boolean>(true);
+
+// #####################

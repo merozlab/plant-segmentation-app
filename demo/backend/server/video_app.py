@@ -100,7 +100,6 @@ def maskify() -> Response:
     base = UPLOADS_PATH / data["session_id"]
     # get original file names
     sfn = data.get("safe_folder_name", None)
-    erode = data.get("erode", False)
     original_file_names = get_original_filenames(sfn) if sfn else None
     print("original_file_names", original_file_names)
     # Collect all JSON files and sort by frame index
@@ -143,10 +142,6 @@ def maskify() -> Response:
                 # Fallback to using the index
                 output_filename = f"{idx+1:05d}_mask.bmp"
             output_path = object_dirs[obj_idx] / output_filename
-            # Erode 1px from the outline of the contour
-            if erode:
-                kernel = np.ones((3, 3), np.uint8)
-                bw_mask = cv2.erode(bw_mask, kernel, iterations=1)
             cv2.imwrite(str(output_path), bw_mask)
 
     return make_response(
@@ -159,14 +154,57 @@ def zip_masks() -> Response:
     """
     Zip all files in a directory.
     """
-    session_id = request.json["session_id"]
+    data = request.json
+    session_id = data["session_id"]
+    erode = data.get("erode", False)
+
     base = UPLOADS_PATH / session_id
     directory = base / "masks"
     zip_name = session_id + "_masks.zip"
-    with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+
+    if erode:
+        # Create a temporary directory for eroded masks
+        eroded_dir = base / "masks_eroded"
+        eroded_dir.mkdir(exist_ok=True)
+
+        # Process each mask file and apply erosion
         for file in directory.rglob("*"):
-            if file.is_file():
-                zipf.write(file, str(file.relative_to(directory)))
+            if file.is_file() and file.suffix.lower() in [
+                ".bmp",
+                ".jpg",
+                ".jpeg",
+                ".png",
+            ]:
+                # Read the image
+                img = cv2.imread(str(file), cv2.IMREAD_GRAYSCALE)
+                if img is not None:
+                    # Apply erosion
+                    kernel = np.ones((3, 3), np.uint8)
+                    eroded_img = cv2.erode(img, kernel, iterations=1)
+
+                    # Save to eroded directory maintaining folder structure
+                    relative_path = file.relative_to(directory)
+                    eroded_file_path = eroded_dir / relative_path
+                    eroded_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(eroded_file_path), eroded_img)
+
+        # Create zip from eroded directory
+        with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file in eroded_dir.rglob("*"):
+                if file.is_file():
+                    zipf.write(file, str(file.relative_to(eroded_dir)))
+
+        # Clean up temporary directory
+        import shutil
+
+        shutil.rmtree(eroded_dir)
+    else:
+        # Original behavior - no erosion
+        with zipfile.ZipFile(base / zip_name, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for file in directory.rglob("*"):
+                if file.is_file():
+                    zipf.write(file, str(file.relative_to(directory)))
+
     # Send the zip file
     return send_from_directory(
         directory=str(base),

@@ -28,6 +28,7 @@ import {
   lengthScaleEndPointAtom,
   isLengthScaleSetAtom,
   centerlineUnitsAtom,
+  erodeBorderAtom,
 } from '@/demo/atoms';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react';
@@ -45,6 +46,7 @@ export default function useRestartSession() {
   const setLengthScaleEndPoint = useSetAtom(lengthScaleEndPointAtom);
   const setIsLengthScaleSet = useSetAtom(isLengthScaleSetAtom);
   const setCenterlineUnits = useSetAtom(centerlineUnitsAtom);
+  const setErodeBorder = useSetAtom(erodeBorderAtom);
   const { clearMessage } = useMessagesSnackbar();
 
   const { inputVideo } = useInputVideo();
@@ -73,6 +75,7 @@ export default function useRestartSession() {
     setLengthScaleEndPoint(null);
     setIsLengthScaleSet(false);
     setCenterlineUnits('pixels');
+    setErodeBorder(false);
     onRestart?.();
     clearMessage();
     setIsLoading(false);
