@@ -19,4 +19,4 @@ poetry.lock
 __pypackages__/
 
 node_modules/
-demo/frontend/src/common/components/centerlines/CenterlineToolbar.tsx
+demo/backend/server/test.ipynb
