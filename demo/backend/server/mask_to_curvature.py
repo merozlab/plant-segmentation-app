@@ -2,7 +2,6 @@ import pandas as pd
 import glob
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from typing import Dict, List, Optional, Tuple
 from numpy.typing import ArrayLike
