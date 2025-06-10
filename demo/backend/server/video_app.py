@@ -101,7 +101,6 @@ def maskify() -> Response:
     # get original file names
     sfn = data.get("safe_folder_name", None)
     original_file_names = get_original_filenames(sfn) if sfn else None
-    print("original_file_names", original_file_names)
     # Collect all JSON files and sort by frame index
     json_files = sorted(base.glob("*.json"), key=lambda f: int(f.stem.split("_")[-1]))
     if not json_files:
