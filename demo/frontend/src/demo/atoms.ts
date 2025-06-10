@@ -194,3 +194,55 @@ export const uploadingStateAtom = atom<'default' | 'uploading' | 'error'>(
 export const uploadErrorMessageAtom = atom<string | null>(null);
 
 export const originalFilePathAtom = atom<string | null>(null);
+
+// #####################
+// Centerline algorithm
+// #####################
+
+export const centerlineAlgorithmAtom = atom<'edge' | 'full' | 'skeletonize'>('edge');
+
+export const centerlinePointsAtom = atom<number>(100);
+
+export const centerlineUnitsAtom = atom<'pixels' | 'meters'>('pixels');
+
+// #####################
+// Length Scale
+// #####################
+
+export type LengthScalePoint = [number, number];
+
+export const isLengthScaleEnabledAtom = atom<boolean>(false);
+
+export const lengthScaleStartPointAtom = atom<LengthScalePoint | null>(null);
+
+export const lengthScaleEndPointAtom = atom<LengthScalePoint | null>(null);
+
+export const lengthScaleMetersAtom = atom<number>(1);
+
+export const lengthScalePixelsAtom = atom<number | null>(get => {
+  const startPoint = get(lengthScaleStartPointAtom);
+  const endPoint = get(lengthScaleEndPointAtom);
+
+  if (!startPoint || !endPoint) {
+    return null;
+  }
+
+  const dx = endPoint[0] - startPoint[0];
+  const dy = endPoint[1] - startPoint[1];
+  return Math.sqrt(dx * dx + dy * dy);
+});
+
+export const pixelsToMetersRatioAtom = atom<number | null>(get => {
+  const pixels = get(lengthScalePixelsAtom);
+  const meters = get(lengthScaleMetersAtom);
+
+  if (!pixels || pixels === 0) {
+    return null;
+  }
+
+  return meters / pixels;
+});
+
+export const isLengthScaleSetAtom = atom<boolean>(false);
+
+// #####################

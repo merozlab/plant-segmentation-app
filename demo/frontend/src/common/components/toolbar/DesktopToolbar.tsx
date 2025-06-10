@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import ObjectsToolbar from '@/common/components/annotations/ObjectsToolbar';
+import LengthScaleToolbar from '@/common/components/lengthscale/LengthScaleToolbar';
 import MoreOptionsToolbar from '@/common/components/options/MoreOptionsToolbar';
 import CenterlineToolbar from '@/common/components/centerlines/CenterlineToolbar';
 import type { CSSProperties } from 'react';
@@ -31,6 +32,7 @@ export default function DesktopToolbar({ tabIndex, onTabChange }: Props) {
 
   const tabs = [
     <ObjectsToolbar key="objects" onTabChange={onTabChange} />,
+    <LengthScaleToolbar key="lengthscale" onTabChange={onTabChange} />,
     <MoreOptionsToolbar key="options" onTabChange={onTabChange} />,
     <CenterlineToolbar key="centerlines" onTabChange={onTabChange} />,
   ];

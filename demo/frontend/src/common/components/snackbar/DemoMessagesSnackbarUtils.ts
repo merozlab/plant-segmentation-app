@@ -49,6 +49,11 @@ export interface MessagesEventMap {
   // download success and error for centerlines CSV
   centerlineDownloadSuccess: MessageEvent;
   centerlineDownloadError: MessageEvent;
+  centerlineConversionError: MessageEvent;
+  // length scale messages
+  lengthScaleEnabled: MessageEvent;
+  lengthScaleSet: MessageEvent;
+  proceedingWithoutLengthScale: MessageEvent;
 }
 
 export const defaultMessageMap: MessagesEventMap = {
@@ -119,6 +124,12 @@ export const defaultMessageMap: MessagesEventMap = {
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: false },
   },
+  // Show when meter conversion fails
+  centerlineConversionError: {
+    text: '❌ Failed to convert centerlines to meters. Check length scale setting.',
+    shown: false,
+    options: { type: 'warning', expire: true, duration: 7000, repeat: false },
+  },
   noActiveSession: {
     text: '❌ No active session found. Please try again.',
     shown: false,
@@ -158,5 +169,20 @@ export const defaultMessageMap: MessagesEventMap = {
     text: '❌ Failed to set base point. Please try again.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: true },
+  },
+  lengthScaleEnabled: {
+    text: 'Click two points in the video to draw a length scale reference line.',
+    shown: false,
+    options: { type: 'info', expire: true, duration: 5000, repeat: false },
+  },
+  lengthScaleSet: {
+    text: '✓ Length scale has been set successfully.',
+    shown: false,
+    options: { type: 'info', expire: true, duration: 3000, repeat: false },
+  },
+  proceedingWithoutLengthScale: {
+    text: 'ℹ️ Proceeding without length scale - centerlines will be calculated in pixels.',
+    shown: false,
+    options: { type: 'warning', expire: true, duration: 5000, repeat: false },
   }
 };

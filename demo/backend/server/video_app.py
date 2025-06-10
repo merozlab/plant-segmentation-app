@@ -15,6 +15,7 @@ import os
 import numpy as np
 import cv2
 import re
+import pandas as pd
 
 from mask_to_curvature import (
     centerlines_to_df,
@@ -249,6 +250,7 @@ def centerlines_pca() -> Response:
             csv_dir = base_path / "centerlines"
             csv_dir.mkdir(parents=True, exist_ok=True)
             for obj, df in centerlines_df.items():
+                df = df.rename({"x": "x (pixels)", "y": "y (pixels)"}, axis=1)
                 df.to_csv(csv_dir / f"{obj}.csv", index=False)
             # After CSVs are written, zip the centerlines folder
             try:
@@ -276,16 +278,90 @@ def centerlines_pca() -> Response:
 def centerline_zip() -> Response:
     data = request.json
     session_id = data["session_id"]
+    units = data.get("units", "pixels")  # Default to pixels
+    pixels_to_meters_ratio = data.get("pixels_to_meters_ratio", None)
+
+    # Validate that if meters are requested, we have a conversion ratio
+    if units == "meters" and (
+        pixels_to_meters_ratio is None or pixels_to_meters_ratio <= 0
+    ):
+        return make_response(
+            "Invalid or missing pixels_to_meters_ratio for meter units", 400
+        )
+
     base = UPLOADS_PATH / session_id
-    # Load the JSON file with mask data
     if not base.exists():
         return make_response("Session not found", 404)
-    zip_name = f"{base.name}_centerlines.zip"
-    return send_from_directory(
-        directory=str(base),
-        path=zip_name,
-        as_attachment=True,
-    )
+
+    centerlines_dir = base / "centerlines"
+    if not centerlines_dir.exists():
+        return make_response("Centerlines not found", 404)
+
+    # If units are meters and we have a conversion ratio, create converted CSV files
+    if units == "meters" and pixels_to_meters_ratio is not None:
+        converted_dir = None
+        try:
+            # Create a temporary directory for converted CSV files
+            converted_dir = base / "centerlines_meters"
+            converted_dir.mkdir(exist_ok=True)
+
+            # Process each CSV file
+            for csv_file in centerlines_dir.glob("*.csv"):
+                df = pd.read_csv(csv_file)
+
+                # Convert pixel coordinates to meters
+                if "x (pixels)" in df.columns:
+                    df["x (meters)"] = df["x (pixels)"] * pixels_to_meters_ratio
+                    df = df.drop(columns=["x (pixels)"])
+
+                if "y (pixels)" in df.columns:
+                    df["y (meters)"] = df["y (pixels)"] * pixels_to_meters_ratio
+                    df = df.drop(columns=["y (pixels)"])
+
+                # Save converted CSV
+                converted_csv_path = converted_dir / csv_file.name
+                df.to_csv(converted_csv_path, index=False)
+
+            # Create zip file with converted CSVs
+            zip_name = f"{base.name}_centerlines_meters.zip"
+            zip_path = base / zip_name
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for file in converted_dir.glob("*.csv"):
+                    zipf.write(file, str(file.relative_to(converted_dir)))
+
+            return send_from_directory(
+                directory=str(base),
+                path=zip_name,
+                as_attachment=True,
+            )
+        except Exception as e:
+            logger.error(f"Error converting centerlines to meters: {e}")
+            return make_response("Error converting to meters", 500)
+        finally:
+            # Clean up temporary directory
+            if converted_dir and converted_dir.exists():
+                import shutil
+
+                try:
+                    shutil.rmtree(converted_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary directory: {e}")
+    else:
+        # Return original pixel-based zip file
+        zip_name = f"{base.name}_centerlines.zip"
+        zip_path = base / zip_name
+
+        # If the zip file doesn't exist, create it from the centerlines directory
+        if not zip_path.exists():
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for file in centerlines_dir.glob("*.csv"):
+                    zipf.write(file, str(file.relative_to(centerlines_dir)))
+
+        return send_from_directory(
+            directory=str(base),
+            path=zip_name,
+            as_attachment=True,
+        )
 
 
 PROCESSING_STATUS: Dict[str, Dict[str, Any]] = {}

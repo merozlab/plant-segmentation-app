@@ -23,7 +23,7 @@ import {
   DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom } from '@/demo/atoms';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom, centerlineUnitsAtom, pixelsToMetersRatioAtom } from '@/demo/atoms';
 import { useAtomValue, useAtom, useSetAtom } from 'jotai';
 // import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
@@ -39,9 +39,11 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom);
   const trackletObjects = useAtomValue(trackletObjectsAtom);
   const originalFilePath = useAtomValue(originalFilePathAtom);
+  const pixelsToMetersRatio = useAtomValue(pixelsToMetersRatioAtom);
   const setCenterlinesMap = useSetAtom(centerlinesAtom);
   const [centerlineAlgorithm, setCenterlineAlgorithm] = useAtom(centerlineAlgorithmAtom);
   const [centerlinePoints, setCenterlinePoints] = useAtom(centerlinePointsAtom);
+  const [centerlineUnits, setCenterlineUnits] = useAtom(centerlineUnitsAtom);
   const { enqueueMessage } = useMessagesSnackbar();
   const [isLoading, setIsLoading] = useState(false);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -120,6 +122,13 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     };
   }, []);
 
+  // Auto-switch to pixels when no length scale is available
+  useEffect(() => {
+    if (!pixelsToMetersRatio && centerlineUnits === 'meters') {
+      setCenterlineUnits('pixels');
+    }
+  }, [pixelsToMetersRatio, centerlineUnits, setCenterlineUnits]);
+
   async function handleGetCenterlines() {
     if (!session) {
       console.error('Session ID is null in handleGetCenterlines');
@@ -133,7 +142,9 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          session_id: session.id
+          session_id: session.id,
+          units: centerlineUnits,
+          pixels_to_meters_ratio: pixelsToMetersRatio
         }),
       });
 
@@ -144,12 +155,27 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        a.download = `${session.id}_centerlines.zip`;
+        // Use appropriate filename based on units
+        const filename = centerlineUnits === 'meters'
+          ? `${session.id}_centerlines_meters.zip`
+          : `${session.id}_centerlines.zip`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         enqueueMessage('centerlineDownloadSuccess');
       } else {
+        // Check if it's a specific error related to meter conversion
+        if (zipResponse.status === 400 || zipResponse.status === 500) {
+          const errorText = await zipResponse.text();
+          if (errorText.includes('pixels_to_meters_ratio') || errorText.includes('meters')) {
+            enqueueMessage('centerlineConversionError');
+          } else {
+            enqueueMessage('centerlineDownloadError');
+          }
+        } else {
+          enqueueMessage('centerlineDownloadError');
+        }
         throw new Error(`Error downloading centerlines: ${zipResponse.status}`);
       }
     } catch (error) {
@@ -172,7 +198,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
       />
 
       {/* Algorithm Selection */}
-      <div className="p-5 md:p-8 border-b border-graydark-600">
+      <div className="p-5 md:p-8 md:pb-0">
         <div className="flex flex-col gap-3">
           <label className="text-white text-sm font-medium">Algorithm Selection</label>
           <label className="flex items-center gap-3 cursor-pointer">
@@ -230,7 +256,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
       </div>
 
       {/* Number of Points Input */}
-      <div className="p-5 md:p-8 border-b border-graydark-600">
+      <div className="p-5 md:p-8 md:pb-0">
         <div className="flex flex-col gap-2">
           <label className="text-white text-sm font-medium">Number of points</label>
           <input
@@ -246,6 +272,39 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
             disabled={isLoading}
           />
           <span className="text-gray-400 text-xs">Minimum 50 points</span>
+        </div>
+      </div>
+
+      {/* Unit Selection */}
+      <div className="p-5 md:py-4 md:px-8">
+        <div className="flex flex-col gap-3">
+          <label className="text-white text-sm font-medium">Download Units</label>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="centerlineUnits"
+                value="pixels"
+                checked={centerlineUnits === 'pixels'}
+                onChange={() => setCenterlineUnits('pixels')}
+                className="radio radio-primary"
+                disabled={isLoading}
+              />
+              <span className="text-white font-medium">Pixels</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="centerlineUnits"
+                value="meters"
+                checked={centerlineUnits === 'meters'}
+                onChange={() => setCenterlineUnits('meters')}
+                className="radio radio-primary"
+                disabled={isLoading || !pixelsToMetersRatio}
+              />
+              <span className={`font-medium ${!pixelsToMetersRatio ? 'text-gray-500' : 'text-white'}`}>Meters</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -290,7 +349,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         })}
       </div> */}
 
-      <div className="p-5 md:p-8 flex flex-col gap-4">
+      <div className="p-5 md:px-8 md:pt-4 flex flex-col gap-4">
         <OptionButton
           title="Get Centerlines"
           Icon={Download}
