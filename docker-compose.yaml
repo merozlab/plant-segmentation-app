@@ -1,4 +1,15 @@
 services:
+  cleanup:
+    image: alpine:latest
+    volumes:
+      - ./demo/data/uploads:/uploads
+    command: >
+      sh -c "
+        find /uploads -type f ! -name '.gitkeep' -delete &&
+        find /uploads -type d ! -path '/uploads' -exec rm -rf {} + 2>/dev/null || true &&
+        echo 'Uploads directory cleaned (keeping .gitkeep)'
+      "
+
   frontend:
     image: sam2/frontend
     build:
