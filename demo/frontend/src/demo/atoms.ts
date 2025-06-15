@@ -54,6 +54,9 @@ export type Session = {
 
 export const sessionAtom = atom<Session | null>(null);
 
+// Track whether user has edited masks after propagation completed
+export const hasEditedMasksAfterPropagationAtom = atom<boolean>(false);
+
 // #####################
 // STREAMING/PLAYBACK
 // #####################
@@ -135,8 +138,12 @@ export const isAddObjectEnabledAtom = atom<boolean>(get => {
   const session = get(sessionAtom);
   const trackletsInitialized = get(areTrackletObjectsInitializedAtom);
   const isObjectLimitReached = get(isTrackletObjectLimitReachedAtom);
+
+  // Allow adding objects if:
+  // 1. Before propagation (ranPropagation is false), OR  
+  // 2. After propagation (user can always edit masks after propagation)
   return (
-    session?.ranPropagation === false &&
+    session != null &&
     trackletsInitialized &&
     !isObjectLimitReached
   );

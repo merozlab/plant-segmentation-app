@@ -40,7 +40,8 @@ export default function DesktopToolbar({ tabIndex, onTabChange }: Props) {
   return (
     <div
       style={toolbarShadow}
-      className="bg-graydark-800 text-white md:basis-[350px] lg:basis-[435px] shrink-0 rounded-xl">
+      className="bg-graydark-800 text-white md:basis-[350px] lg:basis-[435px] shrink-0
+ rounded-xl">
       {tabs[tabIndex]}
     </div>
   );

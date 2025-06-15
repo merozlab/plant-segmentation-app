@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import contextlib
+import json
 import logging
 import os
 import uuid
@@ -13,7 +14,7 @@ from typing import Any, Dict, Generator, List
 
 import numpy as np
 import torch
-from app_conf import APP_ROOT, MODEL_SIZE
+from app_conf import APP_ROOT, MODEL_SIZE, UPLOADS_PATH
 from inference.data_types import (
     AddMaskRequest,
     AddPointsRequest,
@@ -147,10 +148,43 @@ class InferenceAPI:
                 object_ids=object_ids, masks=masks_binary
             )
 
-            return PropagateDataResponse(
+            # Create response object
+            response = PropagateDataResponse(
                 frame_index=frame_idx,
                 results=rle_mask_list,
             )
+
+            # Save frame data as JSON to the same folder structure as propagate_in_video
+            try:
+                output_dir = UPLOADS_PATH / request.session_id
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                # Save to file in the same format as propagate_in_video
+                frame_filename = output_dir / f"frame_{frame_idx:05d}.json"
+
+                # Manually create the frame data structure to match propagate_in_video format
+                frame_data = {
+                    "frame_index": response.frame_index,
+                    "results": [
+                        {
+                            "object_id": result.object_id,
+                            "mask": {
+                                "size": result.mask.size,
+                                "counts": result.mask.counts,
+                            },
+                        }
+                        for result in response.results
+                    ],
+                }
+
+                with open(frame_filename, "w") as f:
+                    json.dump(frame_data, f, indent=2)
+
+                logger.debug(f"Saved add_points frame {frame_idx} to {frame_filename}")
+            except Exception as e:
+                logger.error(f"Error saving add_points frame: {str(e)}")
+
+            return response
 
     def add_mask(self, request: AddMaskRequest) -> PropagateDataResponse:
         """

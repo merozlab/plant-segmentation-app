@@ -16,6 +16,7 @@
 import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import { uploadingStateAtom, uploadErrorMessageAtom } from '@/demo/atoms';
+import { MAX_FILE_SIZE_IN_MB } from '@/demo/DemoConfig';
 import { useAtomValue } from 'jotai';
 
 export default function UploadLoadingScreen() {
@@ -24,7 +25,7 @@ export default function UploadLoadingScreen() {
 
   if (uploadingState === 'error') {
     const defaultDescription =
-      "Please upload another video, and make sure that the video's file size is less than 140MB or use a ZIP file with images in the root folder.";
+      `Please upload another video, and make sure that the video's file size is less than ${MAX_FILE_SIZE_IN_MB}MB or use a ZIP file with images in the root folder.`;
 
     return (
       <LoadingStateScreen

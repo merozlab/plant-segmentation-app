@@ -30,20 +30,20 @@ export default function FirstClickView() {
 
   return (
     <div className="w-full h-full flex flex-col p-8">
+      <h2 className="text-2xl pb-4">Click an object in the video to start</h2>
       <div className="grow flex flex-col gap-6">
-        <h2 className="text-2xl">Click an object in the video to start</h2>
-        <p className="!text-gray-60">
-          If you are uploading a video, make sure it is at 24fps. <br />
-          The demo should work great with ~500 frames, and up to 10 tracked objects. <br />
-          Uploads will be resized to 1280 x 840 pixels.
-        </p>
-        <p className="!text-gray-60">
-          To start, click any object in the video.
-        </p>
+        <div className='bg-graydark-700 p-3 rounded-lg'>
+          <p className="!text-gray-60 text-xs">
+            If you are uploading a video, make sure it is at 24fps. <br />
+            The demo should work great with ~500 frames, and up to 10 tracked objects. <br />
+            Uploads will be resized to 1280 x 840 pixels.
+          </p>
+          <p className="!text-gray-60 text-xs">
+            To start, click any object in the video.
+          </p>
+        </div>
       </div>
-      <div className="flex items-center">
-        <DefaultVideoGalleryModalTrigger />
-      </div>
+      <DefaultVideoGalleryModalTrigger />
     </div>
   );
 }

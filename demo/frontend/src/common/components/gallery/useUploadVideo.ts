@@ -19,7 +19,13 @@ import { VideoData } from '@/demo/atoms';
 import { FileRejection, FileWithPath, useDropzone } from 'react-dropzone';
 import { graphql, useMutation } from 'react-relay';
 import { useAtom } from 'jotai';
-import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig'; // Import the constant
+import {
+  VIDEO_API_ENDPOINT,
+  MAX_FILE_SIZE_IN_MB,
+  MAX_ZIP_FILE_SIZE_MB,
+  MAX_VIDEO_UPLOAD_SIZE,
+  MAX_ZIP_UPLOAD_SIZE
+} from '@/demo/DemoConfig'; // Import the constants
 import { originalFilePathAtom, uploadErrorMessageAtom } from '@/demo/atoms';
 import { useState } from 'react';
 
@@ -29,11 +35,6 @@ const ACCEPT_VIDEOS = {
   'video/quicktime': ['.mov'],
   'application/zip': ['.zip'],
 };
-
-const MAX_FILE_SIZE_IN_MB = 1400;
-const MAX_ZIP_FILE_SIZE_MB = 1024 * 4; // 4GB
-const MAX_VIDEO_UPLOAD_SIZE = MAX_FILE_SIZE_IN_MB * 1024 ** 2;
-const MAX_ZIP_UPLOAD_SIZE = MAX_ZIP_FILE_SIZE_MB * 1024 ** 2;
 
 type Props = {
   onUpload: (video: VideoData) => void;

@@ -22,10 +22,11 @@ import {
   isStreamingAtom,
   sessionAtom,
   streamingStateAtom,
+  hasEditedMasksAfterPropagationAtom,
 } from '@/demo/atoms';
-import {ChevronRight} from '@carbon/icons-react';
-import {useAtom, useAtomValue, useSetAtom} from 'jotai';
-import {useCallback, useEffect} from 'react';
+import { ChevronRight } from '@carbon/icons-react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useCallback, useEffect } from 'react';
 
 export default function TrackAndPlayButton() {
   const video = useVideo();
@@ -33,8 +34,9 @@ export default function TrackAndPlayButton() {
   const streamingState = useAtomValue(streamingStateAtom);
   const areObjectsInitialized = useAtomValue(areTrackletObjectsInitializedAtom);
   const setSession = useSetAtom(sessionAtom);
-  const {enqueueMessage} = useMessagesSnackbar();
-  const {isThrottled, maxThrottles, throttle} = useFunctionThrottle(250, 4);
+  const setContinueEditingAfterPropagation = useSetAtom(hasEditedMasksAfterPropagationAtom);
+  const { enqueueMessage } = useMessagesSnackbar();
+  const { isThrottled, maxThrottles, throttle } = useFunctionThrottle(250, 4);
 
   const isTrackAndPlayDisabled =
     streamingState === 'aborting' || streamingState === 'requesting';
@@ -74,16 +76,17 @@ export default function TrackAndPlayButton() {
         if (!isStreaming) {
           enqueueMessage('trackAndPlayClick');
           video?.streamMasks();
+          setContinueEditingAfterPropagation(false); // Reset edited state when starting new propagation
           setSession(previousSession =>
             previousSession == null
               ? previousSession
-              : {...previousSession, ranPropagation: true},
+              : { ...previousSession, ranPropagation: true },
           );
         } else {
           video?.abortStreamMasks();
         }
       },
-      {enableThrottling: isStreaming},
+      { enableThrottling: isStreaming },
     );
   }, [
     isTrackAndPlayDisabled,
@@ -92,6 +95,7 @@ export default function TrackAndPlayButton() {
     maxThrottles,
     video,
     setSession,
+    setContinueEditingAfterPropagation,
     enqueueMessage,
     throttle,
   ]);

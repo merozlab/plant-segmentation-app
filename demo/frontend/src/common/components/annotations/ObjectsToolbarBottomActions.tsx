@@ -15,13 +15,14 @@
  */
 import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import CloseSessionButton from '@/common/components/annotations/CloseSessionButton';
+import RepropagateMasksButton from '@/common/components/annotations/RepropagateMasksButton';
 import TrackAndPlayButton from '@/common/components/button/TrackAndPlayButton';
 import ToolbarBottomActionsWrapper from '@/common/components/toolbar/ToolbarBottomActionsWrapper';
 import {
   LENGTH_SCALE_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { streamingStateAtom } from '@/demo/atoms';
+import { streamingStateAtom, hasEditedMasksAfterPropagationAtom } from '@/demo/atoms';
 import { useAtomValue } from 'jotai';
 
 type Props = {
@@ -30,21 +31,37 @@ type Props = {
 
 export default function ObjectsToolbarBottomActions({ onTabChange }: Props) {
   const streamingState = useAtomValue(streamingStateAtom);
+  const hasEditedMasksAfterPropagation = useAtomValue(hasEditedMasksAfterPropagationAtom);
 
   const isTrackingEnabled =
-    streamingState !== 'none' && streamingState !== 'full';
+    streamingState !== 'none' && streamingState !== 'full' && !hasEditedMasksAfterPropagation;
+
+  // After propagation completes, show "Good to go" by default
+  const showGoodToGo = streamingState === 'full' && !hasEditedMasksAfterPropagation;
+
+  // After user edits masks post-propagation, show both "Good to go" and "Re-propagate" 
+  const showPostEditOptions = hasEditedMasksAfterPropagation;
 
   return (
     <ToolbarBottomActionsWrapper>
-      {/* <ClearAllPointsInVideoButton
-        onRestart={() => onTabChange(OBJECT_TOOLBAR_INDEX)}
-      /> */}
       <RestartSessionButton
         onRestartSession={() => onTabChange(OBJECT_TOOLBAR_INDEX)}
       />
+
+      {/* Show track button during initial phase */}
       {isTrackingEnabled && <TrackAndPlayButton />}
-      {streamingState === 'full' && (
-        <CloseSessionButton onSessionClose={() => onTabChange(LENGTH_SCALE_TOOLBAR_INDEX)} />
+
+      {/* Show "Good to go" immediately after propagation */}
+      {showGoodToGo && (
+        <CloseSessionButton onSessionClose={() => onTabChange(LENGTH_SCALE_TOOLBAR_INDEX)} cta={true} />
+      )}
+
+      {/* Show both options after user edits masks post-propagation */}
+      {showPostEditOptions && (
+        <div className="flex gap-3">
+          <CloseSessionButton onSessionClose={() => onTabChange(LENGTH_SCALE_TOOLBAR_INDEX)} cta={false} />
+          <RepropagateMasksButton />
+        </div>
       )}
     </ToolbarBottomActionsWrapper>
   );

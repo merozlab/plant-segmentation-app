@@ -65,6 +65,7 @@ import {
   trackletObjectsAtom,
   uploadingStateAtom,
   VideoData,
+  hasEditedMasksAfterPropagationAtom,
 } from '@/demo/atoms';
 import useSettingsContext from '@/settings/useSettingsContext';
 import { color, spacing } from '@/theme/tokens.stylex';
@@ -143,6 +144,7 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   const { isMobile } = useScreenSize();
   const [tabIndex] = useToolbarTabs();
   const { enqueueMessage } = useMessagesSnackbar();
+  const setHasEditedMasksAfterPropagation = useSetAtom(hasEditedMasksAfterPropagationAtom);
 
   useCloseSessionBeforeUnload();
 
@@ -234,6 +236,13 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     } else {
       await createActiveTracklet();
     }
+
+    // If propagation has already run and the user is adding/editing points,
+    // mark that masks have been edited after propagation
+    if (session.ranPropagation) {
+      setHasEditedMasksAfterPropagation(true);
+    }
+
     enqueueMessage('pointClick');
   }
 

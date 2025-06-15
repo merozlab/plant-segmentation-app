@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 import useRestartSession from '@/common/components/session/useRestartSession';
-import {Reset} from '@carbon/icons-react';
-import {Button, Loading} from 'react-daisyui';
+import { Reset } from '@carbon/icons-react';
+import { Button, Loading } from 'react-daisyui';
+import { hasEditedMasksAfterPropagationAtom } from '@/demo/atoms';
+import { useAtomValue } from 'jotai';
 
 type Props = {
   onRestartSession: () => void;
 };
 
-export default function RestartSessionButton({onRestartSession}: Props) {
-  const {restartSession, isLoading} = useRestartSession();
+export default function RestartSessionButton({ onRestartSession }: Props) {
+  const { restartSession, isLoading } = useRestartSession();
+  const hasEditedMasksAfterPropagation = useAtomValue(hasEditedMasksAfterPropagationAtom);
 
   function handleRestartSession() {
     restartSession(onRestartSession);
@@ -34,7 +37,7 @@ export default function RestartSessionButton({onRestartSession}: Props) {
       onClick={handleRestartSession}
       className="!px-4 !rounded-full font-medium text-white hover:bg-black"
       startIcon={isLoading ? <Loading size="sm" /> : <Reset size={20} />}>
-      Start over
+      {hasEditedMasksAfterPropagation ? '' : 'Start over'}
     </Button>
   );
 }

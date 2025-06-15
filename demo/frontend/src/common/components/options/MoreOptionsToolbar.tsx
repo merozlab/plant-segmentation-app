@@ -19,15 +19,15 @@ import ShareSection from '@/common/components/options/ShareSection';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
 import useScreenSize from '@/common/screen/useScreenSize';
-import {useEffect, useRef} from 'react';
+import { useEffect, useRef } from 'react';
 
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
 
-export default function MoreOptionsToolbar({onTabChange}: Props) {
-  const {isMobile} = useScreenSize();
-  const {clearMessage} = useMessagesSnackbar();
+export default function MoreOptionsToolbar({ onTabChange }: Props) {
+  const { isMobile } = useScreenSize();
+  const { clearMessage } = useMessagesSnackbar();
   const didClearMessageSnackbar = useRef(false);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function MoreOptionsToolbar({onTabChange}: Props) {
       <div className="grow">
         <ToolbarHeaderWrapper
           title="Download Masks"
-          className="pb-0 !border-b-0 !text-white"
+          className="!text-white pb-8"
         />
         <ShareSection />
         {/* {!isMobile && <div className="h-[1px] bg-black mt-4 mb-8"></div>} */}

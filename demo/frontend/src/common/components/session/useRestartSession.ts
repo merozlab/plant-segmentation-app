@@ -29,6 +29,7 @@ import {
   isLengthScaleSetAtom,
   centerlineUnitsAtom,
   erodeBorderAtom,
+  hasEditedMasksAfterPropagationAtom,
 } from '@/demo/atoms';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react';
@@ -47,6 +48,7 @@ export default function useRestartSession() {
   const setIsLengthScaleSet = useSetAtom(isLengthScaleSetAtom);
   const setCenterlineUnits = useSetAtom(centerlineUnitsAtom);
   const setErodeBorder = useSetAtom(erodeBorderAtom);
+  const setContinueEditingAfterPropagation = useSetAtom(hasEditedMasksAfterPropagationAtom);
   const { clearMessage } = useMessagesSnackbar();
 
   const { inputVideo } = useInputVideo();
@@ -76,6 +78,7 @@ export default function useRestartSession() {
     setIsLengthScaleSet(false);
     setCenterlineUnits('pixels');
     setErodeBorder(false);
+    setContinueEditingAfterPropagation(false); // Reset continue editing state
     onRestart?.();
     clearMessage();
     setIsLoading(false);

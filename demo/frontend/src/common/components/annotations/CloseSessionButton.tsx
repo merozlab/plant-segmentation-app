@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { Button } from 'react-daisyui';
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import useVideo from '@/common/components/video/editor/useVideo';
-import {ChevronRight} from '@carbon/icons-react';
+import { ChevronRight } from '@carbon/icons-react';
 
 type Props = {
   onSessionClose: () => void;
+  cta?: boolean;
 };
 
-export default function CloseSessionButton({onSessionClose}: Props) {
+export default function CloseSessionButton({ onSessionClose, cta }: Props) {
   const video = useVideo();
 
   function handleCloseSession() {
@@ -31,8 +33,15 @@ export default function CloseSessionButton({onSessionClose}: Props) {
   }
 
   return (
-    <PrimaryCTAButton onClick={handleCloseSession} endIcon={<ChevronRight />}>
-      Good to go
-    </PrimaryCTAButton>
+    cta ? (
+      <PrimaryCTAButton onClick={handleCloseSession} endIcon={<ChevronRight />}>
+        Good to go
+      </PrimaryCTAButton>
+    ) : (
+      <Button onClick={handleCloseSession} endIcon={<ChevronRight />} color="ghost" className="!px-4 !rounded-full font-medium text-white hover:bg-black"
+      >
+        Good to go
+      </Button>
+    )
   );
 }

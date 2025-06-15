@@ -21,6 +21,8 @@ import { sessionAtom, uploadingStateAtom, uploadErrorMessageAtom } from '@/demo/
 import { Close, CloudUpload } from '@carbon/icons-react';
 import { useSetAtom } from 'jotai';
 import { useNavigate } from 'react-router-dom';
+import { MAX_FILE_SIZE_IN_MB, MAX_ZIP_FILE_SIZE_MB } from '@/demo/DemoConfig';
+
 
 export default function DefaultVideoGalleryModalTrigger() {
   const navigate = useNavigate();
@@ -56,7 +58,7 @@ export default function DefaultVideoGalleryModalTrigger() {
   });
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 mb-4">
       <div className="cursor-pointer flex flex-col gap-4" {...getRootProps()}>
         <input {...getInputProps()} />
         <OptionButton
@@ -68,14 +70,14 @@ export default function DefaultVideoGalleryModalTrigger() {
               <>
                 Upload video or ZIP of images{' '}
                 <div className="text-xs opacity-70">
-                  MP4 (max 140MB) or ZIP of images (max 1GB)
+                  MP4 (max {MAX_FILE_SIZE_IN_MB}MB) or ZIP of images (max {MAX_ZIP_FILE_SIZE_MB}MB)
                 </div>
               </>
             ) : (
               <>
                 Upload video or ZIP of images{' '}
                 <div className="text-xs opacity-70">
-                  MP4 (max 140MB) or ZIP of images (max 1GB)
+                  MP4 (max {MAX_FILE_SIZE_IN_MB}MB) or ZIP of images (max {MAX_ZIP_FILE_SIZE_MB}MB)
                 </div>
               </>
             )
