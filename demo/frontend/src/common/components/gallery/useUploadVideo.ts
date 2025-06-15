@@ -30,9 +30,8 @@ const ACCEPT_VIDEOS = {
   'application/zip': ['.zip'],
 };
 
-// 70 MB default max video upload size
-const MAX_FILE_SIZE_IN_MB = 140;
-const MAX_ZIP_FILE_SIZE_MB = 1024; // 1GB 
+const MAX_FILE_SIZE_IN_MB = 1400;
+const MAX_ZIP_FILE_SIZE_MB = 1024 * 4; // 4GB
 const MAX_VIDEO_UPLOAD_SIZE = MAX_FILE_SIZE_IN_MB * 1024 ** 2;
 const MAX_ZIP_UPLOAD_SIZE = MAX_ZIP_FILE_SIZE_MB * 1024 ** 2;
 
