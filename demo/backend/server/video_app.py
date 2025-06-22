@@ -26,6 +26,7 @@ from mask_to_curvature import (
     get_centerline_edge_pca,
     get_centerline_skeletonize,
 )
+from edge_pca_centerline import multi_contour_centerlines
 from pycocotools import mask as mask_util
 
 from app_conf import (
@@ -247,7 +248,8 @@ def centerlines_pca() -> Response:
     data = request.json
     session_id = data["session_id"]
     sfn = data.get("safe_folder_name", None)
-    n_points = data.get("n_points", 100)  # Default to 100 points
+    n_points = data.get("n_points", None)
+    edge_percentage = data.get("edge_percentage", None)
     original_file_names = get_original_filenames(sfn) if sfn else None
 
     base = UPLOADS_PATH / session_id
@@ -263,20 +265,51 @@ def centerlines_pca() -> Response:
     for object_dir in masks_dir.iterdir():
         if object_dir.is_dir():
             if data.get("pca_algorithm") == "edge":
-                response[object_dir.name] = [
-                    get_centerline_edge_pca(frame, n_points=n_points)
-                    for frame in sorted(object_dir.glob("*.bmp"))
-                ]
+                frame_centerlines = []
+                for frame in sorted(object_dir.glob("*.bmp")):
+                    # Get all centerlines for this frame (may be multiple contours)
+                    centerlines = multi_contour_centerlines(
+                        str(frame),
+                        n_contours=None,  # Process all contours
+                        edge_percentage=edge_percentage,
+                        n_points=n_points,
+                    )
+                    centerlines = [c for c in centerlines if len(c) > 0]
+                    # If only one centerline, return it directly; otherwise return all
+                    if len(centerlines) == 1:
+                        frame_centerlines.append(centerlines[0].tolist())
+                    else:
+                        # Join all centerlines in this frame into one combined centerline
+                        combined_centerline = np.concatenate(
+                            centerlines, axis=1
+                        ).tolist()
+                        print(combined_centerline[0])
+                        frame_centerlines.append(combined_centerline)
+                response[object_dir.name] = frame_centerlines
             elif data.get("pca_algorithm") == "skeletonize":
-                response[object_dir.name] = [
-                    get_centerline_skeletonize(frame, n_points=n_points)
-                    for frame in sorted(object_dir.glob("*.bmp"))
-                ]
-            else:
-                response[object_dir.name] = [
-                    get_centerline_pca(frame, n_points=n_points)
-                    for frame in sorted(object_dir.glob("*.bmp"))
-                ]
+                frame_centerlines = []
+                for frame in sorted(object_dir.glob("*.bmp")):
+                    try:
+                        # Get centerline for this frame using skeletonize
+                        centerline = get_centerline_skeletonize(
+                            str(frame), n_points=n_points
+                        )
+                        if (
+                            len(centerline) == 2
+                            and len(centerline[0]) > 0
+                            and len(centerline[1]) > 0
+                        ):
+                            frame_centerlines.append(centerline)
+                        else:
+                            # Empty centerline, append empty lists
+                            frame_centerlines.append([[], []])
+                    except Exception as e:
+                        print(
+                            f"Warning: Failed to extract skeleton centerline for frame {frame}: {e}"
+                        )
+                        # Append empty centerline for this frame
+                        frame_centerlines.append([[], []])
+                response[object_dir.name] = frame_centerlines
 
     # Asynchronously save CSVs for each object
     def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):

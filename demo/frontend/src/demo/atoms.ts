@@ -208,7 +208,9 @@ export const originalFilePathAtom = atom<string | null>(null);
 
 export const centerlineAlgorithmAtom = atom<'edge' | 'full' | 'skeletonize'>('edge');
 
-export const centerlinePointsAtom = atom<number>(100);
+export const centerlinePointsAtom = atom<number | null>(null);
+
+export const centerlineEdgePercentageAtom = atom<number | null>(null);
 
 export const centerlineUnitsAtom = atom<'pixels' | 'meters'>('pixels');
 

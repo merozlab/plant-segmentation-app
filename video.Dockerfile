@@ -36,7 +36,8 @@ RUN pip install werkzeug==2.2.3 \
     pillow>=9.4.0 \
     scipy>=1.14.1 \
     pandas>=2.0.3 \
-    scikit-image>=0.25.2
+    scikit-image>=0.25.2 \ 
+    scipy>=1.15
 
 # Make app directory
 RUN mkdir -p ${APP_ROOT}/server
@@ -45,6 +46,7 @@ RUN mkdir -p ${APP_ROOT}/server
 COPY demo/backend/server/mask_to_curvature.py ${APP_ROOT}/server/
 COPY demo/backend/server/app_conf.py ${APP_ROOT}/server/
 COPY demo/backend/server/video_app.py ${APP_ROOT}/server/
+COPY demo/backend/server/edge_pca_centerline.py ${APP_ROOT}/server/
 
 WORKDIR ${APP_ROOT}/server
 
