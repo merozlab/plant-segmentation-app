@@ -13,17 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {useEffect} from 'react';
-import {Modal} from 'react-daisyui';
-import {Progress} from 'react-daisyui';
-import {Archive} from '@carbon/icons-react';
+import { useEffect } from 'react';
+import { Modal } from 'react-daisyui';
+import { Progress } from 'react-daisyui';
+import { Archive } from '@carbon/icons-react';
 
 type Props = {
   visible: boolean;
   progress: number;
 };
 
-export default function FrameExtractionModal({visible, progress}: Props) {
+export default function FrameExtractionModal({ visible, progress }: Props) {
   // Prevent closing the browser tab or navigating away
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -44,7 +44,7 @@ export default function FrameExtractionModal({visible, progress}: Props) {
   if (!visible) return null;
 
   return (
-    <Modal open={visible}>
+    <Modal open={visible} className="max-w-[600px]">
       <Modal.Header className="font-bold">Extracting Video Frames</Modal.Header>
       <Modal.Body>
         <div className="flex flex-col items-center space-y-4">
