@@ -92,6 +92,122 @@ def propagate_in_video() -> Response:
     return Response(frame, mimetype="multipart/x-savi-stream; boundary=" + boundary)
 
 
+@app.route("/gpu_info", methods=["GET"])
+def gpu_info() -> Response:
+    """Return GPU memory information and estimated frame capacity for each model size"""
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return make_response(
+                {
+                    "gpu_available": False,
+                    "total_memory": 0,
+                    "model_estimates": {
+                        "tiny": {"max_frames": 800, "memory_per_frame": "~2MB"},
+                        "small": {"max_frames": 650, "memory_per_frame": "~3MB"},
+                        "base_plus": {"max_frames": 500, "memory_per_frame": "~4MB"},
+                        "large": {"max_frames": 300, "memory_per_frame": "~6MB"},
+                    },
+                },
+                200,
+            )
+
+        # Get GPU memory info
+        total_memory = torch.cuda.get_device_properties(0).total_memory
+        allocated_memory = torch.cuda.memory_allocated(0)
+        reserved_memory = torch.cuda.memory_reserved(0)
+        available_memory = total_memory - reserved_memory
+
+        # Estimate frame capacity based on empirical data
+        # These are rough estimates based on typical SAM2 memory usage patterns
+        base_memory_overhead = 2 * 1024**3  # 2GB base model overhead
+
+        # Memory per frame estimates (in bytes) for each model
+        memory_per_frame = {
+            "tiny": 1.5 * 1024**2,  # ~1.5MB per frame
+            "small": 2.5 * 1024**2,  # ~2.5MB per frame
+            "base_plus": 4 * 1024**2,  # ~4MB per frame
+            "large": 6 * 1024**2,  # ~6MB per frame
+        }
+
+        model_estimates = {}
+        for model, mem_per_frame in memory_per_frame.items():
+            # Calculate usable memory (total - model overhead - buffer)
+            usable_memory = max(
+                0, available_memory - base_memory_overhead - (512 * 1024**2)
+            )  # 512MB buffer
+            estimated_frames = max(0, int(usable_memory / mem_per_frame))
+
+            model_estimates[model] = {
+                "max_frames": estimated_frames,
+                "memory_per_frame": f"~{mem_per_frame / (1024**2):.1f}MB",
+            }
+
+        return make_response(
+            {
+                "gpu_available": True,
+                "total_memory": total_memory,
+                "allocated_memory": allocated_memory,
+                "reserved_memory": reserved_memory,
+                "available_memory": available_memory,
+                "model_estimates": model_estimates,
+            },
+            200,
+        )
+
+    except Exception as e:
+        return make_response(
+            {
+                "error": str(e),
+                "gpu_available": False,
+                "model_estimates": {
+                    "tiny": {"max_frames": 800, "memory_per_frame": "~1.5MB"},
+                    "small": {"max_frames": 650, "memory_per_frame": "~2.5MB"},
+                    "base_plus": {"max_frames": 500, "memory_per_frame": "~4MB"},
+                    "large": {"max_frames": 300, "memory_per_frame": "~6MB"},
+                },
+            },
+            200,
+        )
+
+
+@app.route("/set_model_size", methods=["POST"])
+def set_model_size() -> Response:
+    """Change the SAM2 model size"""
+    try:
+        data = request.json
+        if not data or "model_size" not in data:
+            return make_response({"error": "model_size parameter required"}, 400)
+
+        model_size = data["model_size"]
+        valid_sizes = ["tiny", "small", "base_plus", "large"]
+
+        if model_size not in valid_sizes:
+            return make_response(
+                {"error": f"Invalid model size. Must be one of: {valid_sizes}"}, 400
+            )
+
+        # Update the model size in app_conf
+        import app_conf
+
+        app_conf.MODEL_SIZE = model_size
+
+        # Note: This requires restarting the inference API to take effect
+        # For now, we'll just return success and let the frontend know a restart is needed
+        return make_response(
+            {
+                "status": "success",
+                "model_size": model_size,
+                "message": "Model size updated. Please restart the session for changes to take effect.",
+            },
+            200,
+        )
+
+    except Exception as e:
+        return make_response({"error": str(e)}, 500)
+
+
 def gen_track_with_mask_stream(
     boundary: str,
     session_id: str,

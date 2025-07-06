@@ -40,7 +40,7 @@ def transcode(
     duration_time_sec: float,
 ):
     codec = os.environ.get("VIDEO_ENCODE_CODEC", "libx264")
-    crf = int(os.environ.get("VIDEO_ENCODE_CRF", "23"))
+    crf = int(os.environ.get("VIDEO_ENCODE_CRF", "28"))  # Slightly higher CRF for faster encoding
     fps = int(os.environ.get("VIDEO_ENCODE_FPS", "24"))
     max_w = int(os.environ.get("VIDEO_ENCODE_MAX_WIDTH", "1280"))
     max_h = int(os.environ.get("VIDEO_ENCODE_MAX_HEIGHT", "720"))
@@ -136,18 +136,8 @@ def normalize_video(
     assert w is not None, "width not available"
     assert h is not None, "height not available"
 
-    # rescale to max_w:max_h if needed & preserve aspect ratio
-    r = w / h
-    if r < 1:
-        h = min(720, h)
-        w = h * r
-    else:
-        w = min(1280, w)
-        h = w / r
-
-    # h264 cannot encode w/ odd dimensions
-    w = int(w)
-    h = int(h)
+    # Keep original dimensions, just ensure they're even for h264 encoding
+    # No rescaling during upload - scaling will happen during crop operation
     if w % 2 != 0:
         w += 1
     if h % 2 != 0:
@@ -167,13 +157,17 @@ def normalize_video(
         "-threads",
         f"{FFMPEG_NUM_THREADS}",  # decode (or filter..?) threads
         "-vf",
-        f"fps={fps},scale={w}:{h},setsar=1:1",
+        f"fps={fps},setsar=1:1",  # Remove scaling, keep original dimensions
         "-c:v",
         codec,
         "-crf",
         f"{crf}",
         "-pix_fmt",
         "yuv420p",
+        "-preset",
+        "ultrafast",  # Use ultrafast preset for maximum speed
+        "-tune",
+        "fastdecode",  # Optimize for fast decoding
         "-threads",
         f"{FFMPEG_NUM_THREADS}",  # encode threads
         out_path,

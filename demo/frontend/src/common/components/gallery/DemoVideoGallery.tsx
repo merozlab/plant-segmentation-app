@@ -13,197 +13,487 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {DemoVideoGalleryQuery} from '@/common/components/gallery/__generated__/DemoVideoGalleryQuery.graphql';
-import VideoGalleryUploadVideo from '@/common/components/gallery/VideoGalleryUploadPhoto';
-import VideoPhoto from '@/common/components/gallery/VideoPhoto';
-import useScreenSize from '@/common/screen/useScreenSize';
-import {VideoData} from '@/demo/atoms';
-import {DEMO_SHORT_NAME} from '@/demo/DemoConfig';
-import {fontSize, fontWeight, spacing} from '@/theme/tokens.stylex';
+import { uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom } from '@/demo/atoms';
+import { spacing } from '@/theme/tokens.stylex';
+import { Close, ReflectHorizontal, ReflectVertical } from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
-import {useMemo} from 'react';
-import PhotoAlbum, {Photo, RenderPhotoProps} from 'react-photo-album';
-import {graphql, useLazyLoadQuery} from 'react-relay';
-import {useLocation, useNavigate} from 'react-router-dom';
+import { useAtom, useSetAtom } from 'jotai';
+import { Modal } from 'react-daisyui';
+import { useNavigate } from 'react-router-dom';
+import { useRef, useEffect, useState, useCallback } from 'react';
+import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
+// Function to convert dimensions to even numbers
+const makeEvenDimensions = (croppedAreaPixels: any) => {
+  if (!croppedAreaPixels) return croppedAreaPixels;
+
+  return {
+    ...croppedAreaPixels,
+    width: Math.round(croppedAreaPixels.width / 2) * 2,
+    height: Math.round(croppedAreaPixels.height / 2) * 2,
+    x: Math.round(croppedAreaPixels.x / 2) * 2,
+    y: Math.round(croppedAreaPixels.y / 2) * 2
+  };
+};
+
+// Function to crop video using backend API
+const cropVideoOnBackend = async (videoPath: string, cropSettings: any): Promise<string> => {
+  const { croppedAreaPixels, flipHorizontal, flipVertical } = cropSettings;
+
+  if (!croppedAreaPixels) {
+    throw new Error('No crop area specified');
+  }
+
+  const evenCroppedArea = makeEvenDimensions(croppedAreaPixels);
+
+  const requestBody = {
+    video_path: videoPath,
+    crop_x: evenCroppedArea.x,
+    crop_y: evenCroppedArea.y,
+    crop_width: evenCroppedArea.width,
+    crop_height: evenCroppedArea.height,
+    flip_horizontal: flipHorizontal || false,
+    flip_vertical: flipVertical || false
+  };
+
+  console.log('Sending crop request to backend:', requestBody);
+
+  const response = await fetch('http://localhost:7264/crop_video', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Backend crop failed: ${response.status} ${response.statusText}`);
+  }
+
+  const result = await response.json();
+
+  if (result.status === 'success') {
+    console.log('Video cropped successfully:', result.output_path);
+    return result.output_path; // Should return path like "/uploads/cropped_video_123.mp4"
+  } else {
+    throw new Error(result.message || 'Backend crop failed');
+  }
+};
+
+// Function to process video with crop and flip data using backend
+const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
+  console.log('Processing video with crop settings:', cropSettings);
+
+  // Convert crop dimensions to even numbers
+  const evenCroppedAreaPixels = makeEvenDimensions(cropSettings.croppedAreaPixels);
+  console.log('Original crop dimensions:', cropSettings.croppedAreaPixels);
+  console.log('Even crop dimensions:', evenCroppedAreaPixels);
+
+  // If no changes were made (default crop, no flip), return original video
+  if (!evenCroppedAreaPixels &&
+    !cropSettings.flipHorizontal &&
+    !cropSettings.flipVertical &&
+    cropSettings.crop.x === 0 &&
+    cropSettings.crop.y === 0 &&
+    cropSettings.crop.width === 100 &&
+    cropSettings.crop.height === 100 &&
+    cropSettings.zoom === 1) {
+    console.log('No changes made, returning original video');
+    return videoData;
+  }
+
+  // Actually crop the video if crop area is specified
+  if (evenCroppedAreaPixels) {
+    try {
+      console.log('Cropping video using backend...');
+      const croppedVideoPath = await cropVideoOnBackend(videoData.path, {
+        croppedAreaPixels: evenCroppedAreaPixels,
+        flipHorizontal: cropSettings.flipHorizontal,
+        flipVertical: cropSettings.flipVertical,
+        zoom: cropSettings.zoom
+      });
+
+      // Return new video data with cropped path
+      return {
+        ...videoData,
+        path: croppedVideoPath,
+        url: `http://localhost:7263${croppedVideoPath}`, // Update URL for frontend display
+        isCropped: true,
+      };
+    } catch (error) {
+      console.error('Error cropping video:', error);
+      // Fall back to original video with metadata if cropping fails
+    }
+  }
+
+  // Fallback: return original video data
+  return videoData;
+};
 
 const styles = stylex.create({
   container: {
-    display: 'flex',
-    flexDirection: 'column',
-    marginHorizontal: spacing[1],
-    height: '100%',
-    lineHeight: 1.2,
-    paddingTop: spacing[8],
+    position: 'relative',
+    minWidth: '85vw',
+    minHeight: '85vh',
+    overflow: 'hidden',
+    color: '#fff',
+    boxShadow: '0 0 100px 50px #000',
+    borderRadius: 16,
+    border: '2px solid transparent',
+    background:
+      'linear-gradient(#1A1C1F, #1A1C1F) padding-box, linear-gradient(to right bottom, #FB73A5,#595FEF,#94EAE2,#FCCB6B) border-box',
   },
-  headerContainer: {
-    marginBottom: spacing[8],
-    fontWeight: fontWeight['medium'],
-    fontSize: fontSize['2xl'],
-    '@media screen and (max-width: 768px)': {
-      marginTop: spacing[0],
-      marginBottom: spacing[8],
-      marginHorizontal: spacing[4],
-      fontSize: fontSize['xl'],
+  closeButton: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    padding: spacing[3],
+    zIndex: 10,
+    cursor: 'pointer',
+    ':hover': {
+      opacity: 0.7,
     },
   },
-  albumContainer: {
-    flex: '1 1 0%',
-    width: '100%',
-    overflowY: 'auto',
+  content: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    padding: spacing[4],
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing[4],
+  },
+  title: {
+    fontSize: '1.5rem',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  cropperContainer: {
+    position: 'relative',
+    height: '60vh',
+    backgroundColor: '#000',
+    marginBottom: spacing[4],
+    display: 'flex',
+    alignItems: 'center',
+    flexDirection: 'column',
+  },
+  controls: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: spacing[3],
+    marginBottom: spacing[4],
+  },
+  flipButton: {
+    padding: spacing[2],
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    border: 'none',
+    borderRadius: 8,
+    color: '#fff',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing[2],
+    ':hover': {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+  },
+  buttonContainer: {
+    display: 'flex',
+    gap: spacing[4],
+    justifyContent: 'center',
+  },
+  button: {
+    padding: `${spacing[3]} ${spacing[6]}`,
+    borderRadius: 8,
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    border: 'none',
+    minWidth: '120px',
+  },
+  reuploadButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#fff',
+    ':hover': {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+  },
+  continueButton: {
+    backgroundColor: '#0064E0',
+    color: '#fff',
+    ':hover': {
+      backgroundColor: '#0056cc',
+    },
+  },
+  cropIndicator: {
+    position: 'absolute',
+    top: spacing[2],
+    right: spacing[2],
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: spacing[2],
+    borderRadius: 4,
+    fontSize: '0.875rem',
+    fontWeight: 'bold',
+    zIndex: 20,
   },
 });
 
-type Props = {
-  showUploadInGallery?: boolean;
-  onSelect?: (video: VideoPhotoData) => void;
-  onUpload: (video: VideoData) => void;
-  onUploadStart?: () => void;
-  onUploadError?: (error: Error) => void;
-};
+type Props = {};
 
-type VideoPhotoData = Photo &
-  VideoData & {
-    poster: string;
-    isUploadOption: boolean;
-  };
-
-export default function DemoVideoGallery({
-  showUploadInGallery = false,
-  onSelect,
-  onUpload,
-  onUploadStart,
-  onUploadError,
-}: Props) {
+export default function DemoVideoGallery({ }: Props) {
+  const modalRef = useRef<HTMLDialogElement | null>(null);
+  const [isOpen, setIsOpen] = useAtom(uploadConfirmationModalAtom);
+  const [videoData, setVideoData] = useAtom(uploadedVideoDataAtom);
   const navigate = useNavigate();
-  const location = useLocation();
-  const {isMobile: isMobileScreenSize} = useScreenSize();
+  const setFrameIndex = useSetAtom(frameIndexAtom);
+  const setUploadingState = useSetAtom(uploadingStateAtom);
+  const setSession = useSetAtom(sessionAtom);
 
-  const data = useLazyLoadQuery<DemoVideoGalleryQuery>(
-    graphql`
-      query DemoVideoGalleryQuery {
-        videos {
-          edges {
-            node {
-              id
-              path
-              posterPath
-              url
-              posterUrl
-              height
-              width
-              posterUrl
-            }
-          }
-        }
-      }
-    `,
-    {},
-  );
+  // Cropping state
+  const [crop, setCrop] = useState<Crop>({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [flipHorizontal, setFlipHorizontal] = useState(false);
+  const [flipVertical, setFlipVertical] = useState(false);
 
-  const allVideos: VideoPhotoData[] = useMemo(() => {
-    return data.videos.edges.map(video => {
-      return {
-        src: video.node.url,
-        path: video.node.path,
-        poster: video.node.posterPath,
-        posterPath: video.node.posterPath,
-        url: video.node.url,
-        posterUrl: video.node.posterUrl,
-        width: video.node.width,
-        height: video.node.height,
-        isUploadOption: false,
-      } as VideoPhotoData;
-    });
-  }, [data.videos.edges]);
+  console.log('DemoVideoGallery render - isOpen:', isOpen, 'videoData:', videoData);
 
-  const shareableVideos: VideoPhotoData[] = useMemo(() => {
-    const filteredVideos = [...allVideos];
-
-    if (showUploadInGallery) {
-      const uploadOption = {
-        src: '',
-        width: 1280,
-        height: 720,
-        poster: '',
-        isUploadOption: true,
-      } as VideoPhotoData;
-      filteredVideos.unshift(uploadOption);
+  const onCropComplete = useCallback((crop: PixelCrop, percentCrop: Crop) => {
+    console.log('DemoVideoGallery - crop completed:', crop);
+    console.log('DemoVideoGallery - percent crop:', percentCrop);
+    
+    // Calculate crop coordinates relative to original video dimensions
+    if (videoData) {
+      const scaledCrop = {
+        x: Math.round((percentCrop.x / 100) * videoData.width),
+        y: Math.round((percentCrop.y / 100) * videoData.height),
+        width: Math.round((percentCrop.width / 100) * videoData.width),
+        height: Math.round((percentCrop.height / 100) * videoData.height),
+        unit: 'px' as const
+      };
+      console.log('DemoVideoGallery - scaled crop for original video:', scaledCrop);
+      setCompletedCrop(scaledCrop);
+    } else {
+      setCompletedCrop(crop);
     }
+  }, [videoData]);
 
-    return filteredVideos;
-  }, [allVideos, showUploadInGallery]);
-
-  const renderPhoto = ({
-    photo: video,
-    imageProps,
-  }: RenderPhotoProps<VideoPhotoData>) => {
-    const {style} = imageProps;
-    const {url, posterUrl} = video;
-
-    return video.isUploadOption ? (
-      <VideoGalleryUploadVideo
-        style={style}
-        onUpload={handleUploadVideo}
-        onUploadError={onUploadError}
-        onUploadStart={onUploadStart}
-      />
-    ) : (
-      <VideoPhoto
-        src={url}
-        poster={posterUrl}
-        style={style}
-        onClick={() => {
-          navigate(location.pathname, {
-            state: {
-              video,
-            },
-          });
-          onSelect?.(video);
-        }}
-      />
-    );
+  // Calculate if crop will be resized and determine indicator color
+  const getCropIndicatorInfo = () => {
+    let width, height;
+    
+    if (!completedCrop && videoData) {
+      // If no crop is set, use full video dimensions
+      width = videoData.width;
+      height = videoData.height;
+    } else if (completedCrop) {
+      width = completedCrop.width;
+      height = completedCrop.height;
+    } else {
+      return { width: 0, height: 0, willResize: false, color: '#fff' };
+    }
+    
+    const willResize = width > 1280 || height > 720;
+    const color = willResize ? '#ff4444' : '#44ff44';
+    
+    return { width, height, willResize, color };
   };
 
-  function handleUploadVideo(video: VideoData) {
-    navigate(location.pathname, {
-      state: {
-        video,
-      },
-    });
-    onUpload?.(video);
-  }
+  const cropInfo = getCropIndicatorInfo();
 
-  const descriptionStyle = 'text-sm md:text-base text-gray-400 leading-snug';
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (modal) {
+      if (isOpen) {
+        modal.style.display = 'grid';
+        modal.showModal();
+      } else {
+        modal.close();
+        modal.style.display = 'none';
+      }
+    }
+  }, [isOpen]);
+
+  // Reset crop settings when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 });
+      setCompletedCrop(null);
+      setZoom(1);
+      setFlipHorizontal(false);
+      setFlipVertical(false);
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    console.log('DemoVideoGallery - handleClose called');
+    setIsOpen(false);
+  };
+
+  const handleReupload = () => {
+    console.log('DemoVideoGallery - handleReupload called');
+    setIsOpen(false);
+    // Reset state and allow user to upload another file
+    setVideoData(null);
+    setUploadingState('default');
+    setSession(null);
+  };
+
+  // Function to handle horizontal flip without adjusting crop
+  const handleFlipHorizontal = useCallback(() => {
+    setFlipHorizontal(!flipHorizontal);
+  }, [flipHorizontal]);
+
+  // Function to handle vertical flip without adjusting crop
+  const handleFlipVertical = useCallback(() => {
+    setFlipVertical(!flipVertical);
+  }, [flipVertical]);
+
+  const handleContinue = async () => {
+    console.log('DemoVideoGallery - handleContinue called');
+    setIsOpen(false);
+    if (videoData) {
+      setUploadingState('uploading');
+
+      try {
+        // Process the video with crop and flip data
+        const processedVideoData = await processVideoWithCrop(videoData, {
+          crop,
+          zoom,
+          flipHorizontal,
+          flipVertical,
+          croppedAreaPixels: completedCrop
+        });
+
+        console.log('Processed video data:', processedVideoData);
+
+        // Navigate with the processed video data (cropped or original)
+        navigate(
+          { pathname: location.pathname, search: location.search },
+          { state: { video: processedVideoData } },
+        );
+        setFrameIndex(0);
+        setUploadingState('default');
+        setSession(null);
+        setVideoData(null);
+      } catch (error) {
+        console.error('Error processing video:', error);
+        setUploadingState('error');
+      }
+    }
+  };
+
+  const videoTransform = `scaleX(${flipHorizontal ? -1 : 1}) scaleY(${flipVertical ? -1 : 1})`;
 
   return (
-    <div {...stylex.props(styles.container)}>
-      <div {...stylex.props(styles.albumContainer)}>
-        <div className="pt-0 md:px-16 md:pt-8 md:pb-8">
-          <div {...stylex.props(styles.headerContainer)}>
-            <h3 className="mb-2">
-              Select a video to try{' '}
-              <span className="hidden md:inline">
-                with the {DEMO_SHORT_NAME}
-              </span>
-            </h3>
-            <p className={descriptionStyle}>
-              You’ll be able to download what you make.
-            </p>
+    <Modal ref={modalRef} {...stylex.props(styles.container)}>
+      <div onClick={handleClose} {...stylex.props(styles.closeButton)}>
+        <Close size={28} />
+      </div>
+      <Modal.Body>
+        <div {...stylex.props(styles.content)}>
+          <div {...stylex.props(styles.header)}>
+            <div {...stylex.props(styles.title)}>
+              Crop and adjust your video
+            </div>
           </div>
 
-          <PhotoAlbum<VideoPhotoData>
-            layout="rows"
-            photos={shareableVideos}
-            targetRowHeight={isMobileScreenSize ? 120 : 200}
-            rowConstraints={{
-              singleRowMaxHeight: isMobileScreenSize ? 120 : 240,
-              maxPhotos: 3,
-            }}
-            renderPhoto={renderPhoto}
-            spacing={4}
-          />
+          {videoData && (
+            <div {...stylex.props(styles.cropperContainer)}>
+              <ReactCrop
+                crop={crop}
+                onChange={(newCrop) => setCrop(newCrop)}
+                onComplete={(c, percentCrop) => onCropComplete(c, percentCrop)}
+                style={{
+                  height: '100%'
+                }}
+              >
+                <video
+                  src={videoData.url}
+                  style={{
+                    transform: `${videoTransform} scale(${zoom})`,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    display: 'block'
+                  }}
+                  controls={false}
+                  muted
+                  autoPlay
+                  loop
+                />
+              </ReactCrop>
+              
+              {/* Crop size indicator */}
+              <div {...stylex.props(styles.cropIndicator)} style={{ color: cropInfo.color }}>
+                <div>{cropInfo.width}×{cropInfo.height}px</div>
+                {cropInfo.willResize && (
+                  <div style={{ fontSize: '0.75rem', marginTop: '2px', opacity: 0.9 }}>
+                    Will be resized to max 1280×720
+                  </div>
+                )}
+              </div>
+              
+              <style>
+                {`
+                  .ReactCrop__child-wrapper {
+                    width: 100% !important;
+                    height: 100% !important;
+                    position: relative !important;
+                  }
+                `}
+              </style>
+            </div>
+          )}
+
+          <div {...stylex.props(styles.controls)}>
+            <button
+              onClick={handleFlipHorizontal}
+              {...stylex.props(styles.flipButton)}
+            >
+              <ReflectHorizontal size={20} />
+              Flip Horizontal
+            </button>
+            <button
+              onClick={handleFlipVertical}
+              {...stylex.props(styles.flipButton)}
+            >
+              <ReflectVertical size={20} />
+              Flip Vertical
+            </button>
+            <label {...stylex.props(styles.flipButton)}>
+              Zoom: {zoom.toFixed(1)}x
+              <input
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.1"
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                style={{ marginLeft: '8px', width: '100px' }}
+              />
+            </label>
+          </div>
+
+          <div {...stylex.props(styles.buttonContainer)}>
+            <button
+              onClick={handleReupload}
+              {...stylex.props(styles.button, styles.reuploadButton)}
+            >
+              Reupload
+            </button>
+            <button
+              onClick={handleContinue}
+              {...stylex.props(styles.button, styles.continueButton)}
+            >
+              Continue
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      </Modal.Body>
+    </Modal>
   );
 }

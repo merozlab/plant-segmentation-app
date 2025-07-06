@@ -106,7 +106,7 @@ export default function useUploadVideo({
       let pollAttempts = 0;
       let videoUrl = null;
 
-      while (pollAttempts < 60) {
+      while (pollAttempts < 120) {  // Increased to 10 minutes total
         await new Promise(res => setTimeout(res, 5000));
         const statusResp = await fetch(`${VIDEO_API_ENDPOINT}/api/video_status/${videoId}`);
         if (!statusResp.ok) throw new Error('Failed to check processing status');
@@ -203,6 +203,7 @@ export default function useUploadVideo({
       acceptedFiles: FileWithPath[],
       fileRejections: FileRejection[],
     ) => {
+      console.log('useUploadVideo - onDrop called with:', { acceptedFiles, fileRejections });
       setErrorMessage(null);
 
       // Check if any of the files (only 1 file allowed) is rejected. The
@@ -267,7 +268,7 @@ export default function useUploadVideo({
         // Poll for video processing completion
         let pollAttempts = 0;
         let videoUrl = null;
-        while (pollAttempts < 60) { // up to 5 minutes (5s * 60)
+        while (pollAttempts < 120) { // up to 10 minutes (5s * 120)
           try {
             await new Promise(res => setTimeout(res, 5000)); // Wait 5 seconds between polls
             const statusResp = await fetch(`${VIDEO_API_ENDPOINT}/api/video_status/${videoId}`);
@@ -362,11 +363,13 @@ export default function useUploadVideo({
           file,
         },
         onCompleted: response => {
+          console.log('useUploadVideo - GraphQL upload completed:', response);
           const videoData = response.uploadVideo;
           // If path is already correct, use as is
           onUpload(videoData);
         },
         onError: error => {
+          console.log('useUploadVideo - GraphQL upload error:', error);
           Logger.error(error);
           onUploadError?.(error);
           setErrorMessage('Upload failed.');

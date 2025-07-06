@@ -202,6 +202,10 @@ export const uploadErrorMessageAtom = atom<string | null>(null);
 
 export const originalFilePathAtom = atom<string | null>(null);
 
+export const uploadConfirmationModalAtom = atom<boolean>(false);
+
+export const uploadedVideoDataAtom = atom<VideoData | null>(null);
+
 // #####################
 // Centerline algorithm
 // #####################

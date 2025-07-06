@@ -230,7 +230,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         description="Choose algorithm and extract centerline"
         className="pb-4"
       />
-      <div className='overflow-y-scroll'>
+      <div className='overflow-y-auto'>
         {/* Algorithm Selection */}
         <div className="p-5 md:p-8 md:pb-0">
           <div className="flex flex-col gap-3">

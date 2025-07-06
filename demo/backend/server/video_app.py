@@ -503,8 +503,6 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
             "libx264",
             "-pix_fmt",
             "yuv420p",
-            "-vf",
-            "scale=1280:720:force_original_aspect_ratio=decrease",
             video_path,
         ]
 
@@ -621,6 +619,122 @@ else:
         return make_response(
             "Local folder processing is disabled in this deployment", 403
         )
+
+
+@app.route("/crop_video", methods=["POST"])
+def crop_video():
+    """Crop a video using the provided coordinates and flip settings"""
+    try:
+        data = request.json
+        if not data:
+            return make_response("No JSON data provided", 400)
+
+        # Extract required parameters
+        video_path = data.get("video_path")
+        crop_x = data.get("crop_x")
+        crop_y = data.get("crop_y")
+        crop_width = data.get("crop_width")
+        crop_height = data.get("crop_height")
+        flip_horizontal = data.get("flip_horizontal", False)
+        flip_vertical = data.get("flip_vertical", False)
+
+        # Validate required parameters
+        if not all(
+            [
+                video_path is not None,
+                crop_x is not None,
+                crop_y is not None,
+                crop_width is not None,
+                crop_height is not None,
+            ]
+        ):
+            return make_response("Missing required crop parameters", 400)
+
+        # Ensure the video path is within uploads directory for security
+        if not (video_path.startswith("uploads/") or video_path.startswith("/uploads/")):
+            return make_response("Invalid video path", 400)
+
+        # Convert to absolute path by properly handling path prefixes
+        if video_path.startswith("/uploads/"):
+            relative_path = video_path[9:]  # Remove "/uploads/" prefix
+        elif video_path.startswith("uploads/"):
+            relative_path = video_path[8:]  # Remove "uploads/" prefix
+        else:
+            relative_path = video_path
+            
+        input_video_path = UPLOADS_PATH / relative_path
+        print(f"Input video path: {input_video_path}")
+        if not input_video_path.exists():
+            return make_response(f"Video file not found: {input_video_path}", 404)
+
+        # Generate output filename
+        timestamp = int(time.time())
+        output_filename = f"cropped_{timestamp}_{input_video_path.name}"
+        output_video_path = UPLOADS_PATH / output_filename
+
+        # Build FFmpeg command for cropping
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",  # Overwrite output file
+            "-i",
+            str(input_video_path),
+            "-vf",
+        ]
+
+        # Build video filter string
+        # Apply transformations in correct order: flip first, then crop
+        filter_parts = []
+
+        # Add flip filters first
+        if flip_horizontal:
+            filter_parts.append("hflip")
+        if flip_vertical:
+            filter_parts.append("vflip")
+
+        # Add crop filter after flips
+        filter_parts.append(f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y}")
+        
+        # Add scaling after crop to ensure final output is max 1280x720
+        filter_parts.append("scale=1280:720:force_original_aspect_ratio=decrease")
+
+        # Join filters with commas
+        filter_string = ",".join(filter_parts)
+        ffmpeg_cmd.append(filter_string)
+
+        # Add output codec, frame rate, and path
+        ffmpeg_cmd.extend([
+            "-c:v", "libx264",
+            "-preset", "fast", 
+            "-crf", "23",
+            "-r", "24",  # Force 24fps output
+            str(output_video_path)
+        ])
+
+        print(f"Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
+
+        # Execute FFmpeg command
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=600)  # Increased to 10 minutes
+
+        if result.returncode != 0:
+            print(f"FFmpeg error: {result.stderr}")
+            return make_response(f"Video cropping failed: {result.stderr}", 500)
+
+        # Return success response with output path
+        output_path = f"/uploads/{output_filename}"
+        return make_response(
+            {
+                "status": "success",
+                "output_path": output_path,
+                "message": "Video cropped successfully",
+            },
+            200,
+        )
+
+    except subprocess.TimeoutExpired:
+        return make_response("Video cropping timed out", 500)
+    except Exception as e:
+        print(f"Error cropping video: {str(e)}")
+        return make_response(f"Internal server error: {str(e)}", 500)
 
 
 if __name__ == "__main__":

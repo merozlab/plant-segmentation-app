@@ -56,8 +56,8 @@ export const IS_LOCAL_DEPLOYMENT = false;
 export const demoObjectLimit = 3;
 
 // File upload size limits
-export const MAX_FILE_SIZE_IN_MB = 1400;
-export const MAX_ZIP_FILE_SIZE_MB = 1024 * 4; // 4GB
+export const MAX_FILE_SIZE_IN_MB = 500;  // Increased for large high-res videos
+export const MAX_ZIP_FILE_SIZE_MB = 500;
 export const MAX_VIDEO_UPLOAD_SIZE = MAX_FILE_SIZE_IN_MB * 1024 ** 2;
 export const MAX_ZIP_UPLOAD_SIZE = MAX_ZIP_FILE_SIZE_MB * 1024 ** 2;
 

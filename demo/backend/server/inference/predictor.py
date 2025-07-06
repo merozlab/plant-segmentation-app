@@ -91,6 +91,15 @@ class InferenceAPI:
             model_cfg, checkpoint, device=device
         )
         self.inference_lock = Lock()
+        
+        # Enable memory optimization for better frame capacity
+        if device.type == "cuda":
+            torch.cuda.empty_cache()  # Clear any existing cache
+            # Enable memory efficient attention if available
+            try:
+                torch.backends.cuda.enable_flash_sdp(True)
+            except:
+                pass
 
     def autocast_context(self):
         if self.device.type == "cuda":
@@ -101,9 +110,9 @@ class InferenceAPI:
     def start_session(self, request: StartSessionRequest) -> StartSessionResponse:
         with self.autocast_context(), self.inference_lock:
             session_id = str(uuid.uuid4())
-            # for MPS devices, we offload the video frames to CPU by default to avoid
-            # memory fragmentation in MPS (which sometimes crashes the entire process)
-            offload_video_to_cpu = self.device.type == "mps"
+            # Offload video frames to CPU to save GPU memory for longer videos
+            # This helps process more frames at the cost of slightly slower inference
+            offload_video_to_cpu = self.device.type in ["mps", "cuda"]  # Enable for CUDA as well
             inference_state = self.predictor.init_state(
                 request.path,
                 offload_video_to_cpu=offload_video_to_cpu,
@@ -457,5 +466,23 @@ class InferenceAPI:
             )
             return False
         else:
+            # Clean up GPU memory when closing session
+            if self.device.type == "cuda":
+                try:
+                    # Try to clear any session-specific GPU memory
+                    inference_state = session.get("state")
+                    if inference_state is not None:
+                        # Clear any cached tensors in the inference state
+                        if hasattr(inference_state, 'obj_id_to_frames'):
+                            inference_state.obj_id_to_frames.clear()
+                        if hasattr(inference_state, 'obj_ids_to_obj_idx'):
+                            inference_state.obj_ids_to_obj_idx.clear()
+                    
+                    # Force GPU memory cleanup
+                    torch.cuda.empty_cache()
+                    logger.info(f"GPU memory cleaned for session {session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean GPU memory for session {session_id}: {e}")
+            
             logger.info(f"removed session {session_id}; {self.__get_session_stats()}")
             return True
