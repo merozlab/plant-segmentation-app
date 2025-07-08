@@ -54,6 +54,7 @@ export interface MessagesEventMap {
   lengthScaleEnabled: MessageEvent;
   lengthScaleSet: MessageEvent;
   proceedingWithoutLengthScale: MessageEvent;
+  videoCropError: MessageEvent;
 }
 
 export const defaultMessageMap: MessagesEventMap = {
@@ -184,5 +185,10 @@ export const defaultMessageMap: MessagesEventMap = {
     text: 'ℹ️ Proceeding without length scale - centerlines will be calculated in pixels.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 5000, repeat: false },
+  },
+  videoCropError: {
+    text: '❌ Video crop operation failed. Please check the error details.',
+    shown: false,
+    options: { type: 'warning', expire: true, duration: 7000, repeat: true },
   }
 };

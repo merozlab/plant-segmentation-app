@@ -61,7 +61,7 @@ services:
       - API_URL=http://localhost:7264
       - INFERENCE_API_URL=http://inference:5000
       # ffmpeg/video encode settings
-      - FFMPEG_NUM_THREADS=1
+      - FFMPEG_NUM_THREADS=4
       - VIDEO_ENCODE_CODEC=libx264
       - VIDEO_ENCODE_CRF=23
       - VIDEO_ENCODE_FPS=24

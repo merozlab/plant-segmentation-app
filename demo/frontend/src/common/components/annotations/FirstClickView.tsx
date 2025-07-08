@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
+import DemoVideoGallery from '@/common/components/gallery/DemoVideoGallery';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import AdvancedSettings from '@/common/components/settings/AdvancedSettings';
 import { useEffect, useRef } from 'react';
@@ -45,6 +46,7 @@ export default function FirstClickView() {
 
       </div>
       <DefaultVideoGalleryModalTrigger />
+      <DemoVideoGallery />
     </div>
   );
 }

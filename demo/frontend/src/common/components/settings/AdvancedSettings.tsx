@@ -167,7 +167,7 @@ export default function AdvancedSettings() {
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
         setSelectedModel(modelSize);
         setUpdateStatus('Model updated! Please refresh the page for changes to take effect.');
@@ -196,7 +196,7 @@ export default function AdvancedSettings() {
 
   return (
     <div {...stylex.props(styles.container)}>
-      <div 
+      <div
         {...stylex.props(styles.header)}
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -216,14 +216,23 @@ export default function AdvancedSettings() {
               {gpuInfo && (
                 <>
                   <div style={{ marginBottom: 12, fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.7)' }}>
-                    <strong>GPU:</strong> {gpuInfo.gpu_available ? 'Available' : 'Not Available'} 
-                    {gpuInfo.total_memory && ` (${formatMemory(gpuInfo.total_memory)} total)`}
+                    <strong>GPU:</strong> {gpuInfo.gpu_available ? 'Available' : 'Not Available'}
+                    {gpuInfo.total_memory && (
+                      <div style={{ marginTop: 4 }}>
+                        <strong>Total Memory:</strong> {formatMemory(gpuInfo.total_memory)}
+                        {gpuInfo.available_memory && (
+                          <span style={{ marginLeft: 8 }}>
+                            <strong>Available:</strong> {formatMemory(gpuInfo.available_memory)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  
+
                   <div style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
                     Model Size Selection
                   </div>
-                  
+
                   <div {...stylex.props(styles.modelGrid)}>
                     {Object.entries(gpuInfo.model_estimates).map(([modelSize, info]) => (
                       <div
@@ -238,7 +247,7 @@ export default function AdvancedSettings() {
                           {MODEL_DISPLAY_NAMES[modelSize as keyof typeof MODEL_DISPLAY_NAMES]}
                         </div>
                         <div {...stylex.props(styles.modelStats)}>
-                          Max frames: ~{info.max_frames} • Memory per frame: {info.memory_per_frame}
+                          {Math.round(info.max_frames / 100) * 100} Frames • Memory per frame: {info.memory_per_frame}
                         </div>
                         <div {...stylex.props(styles.modelDescription)}>
                           {MODEL_DESCRIPTIONS[modelSize as keyof typeof MODEL_DESCRIPTIONS]}
@@ -246,9 +255,9 @@ export default function AdvancedSettings() {
                       </div>
                     ))}
                   </div>
-                  
+
                   {updateStatus && (
-                    <div 
+                    <div
                       {...stylex.props(
                         updateStatus.includes('Error') ? styles.errorText : styles.successText
                       )}

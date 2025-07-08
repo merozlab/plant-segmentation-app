@@ -60,16 +60,20 @@ export default function ErrorReport({onReport = emptyFunction}: Props) {
     }
   }
 
+  if (error == null) {
+    return null;
+  }
+
   return (
     <Modal ref={errorModalRef} className="max-w-[800px]">
       <Modal.Header>
-        {error != null ? getErrorTitle(error) : 'Unknown error'}
+        {getErrorTitle(error)}
       </Modal.Header>
       <Modal.Body>
         <Editor
           className="h-[400px]"
           language="javascript"
-          value={error?.stack ?? ''}
+          value={error.stack ?? ''}
           options={{
             wordWrap: 'wordWrapColumn',
             scrollBeyondLastLine: false,

@@ -16,10 +16,10 @@
 import introVideo from '@/assets/videos/sam2_720px_dark.mp4';
 import introVideoPoster from '@/assets/videos/sam2_video_poster.png';
 import StaticVideoPlayer from '@/common/loading/StaticVideoPlayer';
-import {borderRadius, fontSize, spacing} from '@/theme/tokens.stylex';
+import { borderRadius, fontSize, spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
-import {PropsWithChildren, ReactNode} from 'react';
-import {Link} from 'react-router-dom';
+import { PropsWithChildren, ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 const styles = stylex.create({
   container: {
@@ -46,8 +46,8 @@ const styles = stylex.create({
   animation: {
     border: '2px solid white',
     borderRadius: borderRadius['xl'],
-    maxWidth: 450,
-    maxHeight: 450,
+    maxWidth: 350,
+    maxHeight: 350,
     height: '100%',
     overflow: 'hidden',
     '@media screen and (max-width: 768px)': {

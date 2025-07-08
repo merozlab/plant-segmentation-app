@@ -34,7 +34,6 @@ import { PointsLayer } from '@/common/components/video/layers/PointsLayer';
 import { LengthScaleLayer } from '@/common/components/lengthscale/LengthScaleLayer';
 // import { BasePointsLayer } from '@/common/components/video/layers/BasePointsLayer';
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
-import UploadLoadingScreen from '@/common/loading/UploadLoadingScreen';
 import useScreenSize from '@/common/screen/useScreenSize';
 import ToggleEffectsButton from '@/common/components/button/ToggleEffectsButton';
 import ActionButton from '@/common/components/button/ActionButton';
@@ -63,7 +62,6 @@ import {
   sessionAtom,
   streamingStateAtom,
   trackletObjectsAtom,
-  uploadingStateAtom,
   VideoData,
   hasEditedMasksAfterPropagationAtom,
 } from '@/demo/atoms';
@@ -138,7 +136,6 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   const streamingState = useAtomValue(streamingStateAtom);
   const isPlaying = useAtomValue(isPlayingAtom);
   const isVideoLoading = useAtomValue(isVideoLoadingAtom);
-  const uploadingState = useAtomValue(uploadingStateAtom);
   const [renderingError, setRenderingError] = useState<ErrorObject | null>(null);
   // const setCenterlinesMap = useSetAtom(centerlinesAtom);
   const { isMobile } = useScreenSize();
@@ -568,11 +565,6 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
             description="This demo is not optimized for your device. Please try again on a different device with a larger screen."
             linkProps={{ to: '..', label: 'Back to homepage' }}
           />
-        </div>
-      )}
-      {uploadingState !== 'default' && (
-        <div {...stylex.props(styles.loadingScreenWrapper)}>
-          <UploadLoadingScreen />
         </div>
       )}
       <div {...stylex.props(styles.container)}>

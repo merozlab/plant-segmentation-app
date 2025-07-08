@@ -36,6 +36,7 @@ export default function DefaultVideoGalleryModalTrigger() {
     // Store the raw video data and show crop modal immediately (before processing)
     setUploadedVideoData(videoData);
     setUploadConfirmationModal(true);
+    // Keep the uploading state to show loading on trigger
   };
 
   const {
@@ -83,7 +84,7 @@ export default function DefaultVideoGalleryModalTrigger() {
             )
           }
           Icon={error !== null ? Close : CloudUpload}
-          loadingProps={{ loading: isUploading, label: isUploading ? 'Uploading or processing...' : 'Uploading...' }}
+          loadingProps={{ loading: isUploading, label: 'Uploading...' }}
           onClick={() => { }}
         />
       </div>
