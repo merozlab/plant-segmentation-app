@@ -152,7 +152,7 @@ def multi_contour_centerlines(
     n_contours: int | None = None,
     edge_percentage: float | None = None,
     n_points: int | None = None,
-) -> List[np.ndarray]:
+) -> np.ndarray:
     """
     Extract centerlines for multiple contours in a mask image.
 
@@ -178,27 +178,32 @@ def multi_contour_centerlines(
 
     # Sort contours by area (largest first)
     contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
-    if n_contours is None:
-        n_contours = len(contours_sorted)
+
     # Take only the requested number of contours
+    if n_contours is None or n_contours > len(contours_sorted):
+        n_contours = len(contours_sorted)
     selected_contours = contours_sorted[: min(n_contours, len(contours_sorted))]
 
     centerlines = []
     for i, contour in enumerate(selected_contours):
+        if area := cv2.contourArea(contour) < 100:
+            print(f"Skipping contour {i} with area {area} (too small)")
+            continue
         try:
             # Create a mask for this specific contour
             contour_mask = np.zeros_like(mask)
             cv2.fillPoly(contour_mask, [contour], (255,))
+            # print(
+            #     f"Processing contour {i + 1}/{n_contours} with area {cv2.contourArea(contour)}"
+            # )
             centerline = edge_pca_centerline_from_contour(
                 contour, contour_mask, edge_percentage, n_points
             )
             centerlines.append(centerline)
-
         except Exception as e:
-            print(f"Warning: Failed to extract centerline for contour {i}: {e}")
             continue
-
-    return centerlines
+    stacked = np.vstack(centerlines) if centerlines else np.empty((0, 2))
+    return stacked
 
 
 def edge_pca_centerline_from_contour(
@@ -216,7 +221,7 @@ def edge_pca_centerline_from_contour(
         n_points: Number of points to generate along centerline
 
     Returns:
-        Centerline as a numpy array of shape (2, n_points)
+        Centerline as numpy array of shape (n_points, 2)
     """
     # Distribute points uniformly along contour
     if edge_percentage is None or n_points is None:
@@ -226,46 +231,105 @@ def edge_pca_centerline_from_contour(
             edge_percentage = edge_percentage_
         if n_points is None:
             n_points = n_points_
-    if n_points <= 10:
-        return np.array([])
+
     contour_points = contour.reshape(-1, 2)
     x_sorted, y_sorted = contour_points[:, 0], contour_points[:, 1]
     x_uniform, y_uniform = distribute_points(x_sorted, y_sorted, len(contour))
     uniform_contour = np.column_stack((x_uniform, y_uniform))
     sorted_points = PCA_sort(uniform_contour)
-
+    print("GOT EDGE_PERCENTAGE:", edge_percentage)
     # Get first and last edge_percentage of points
     n = max(int(len(sorted_points) * edge_percentage), 1)
     start_edge_points = sorted_points[:n]
     end_edge_points = sorted_points[-n:]
 
+    # Fit rectangular contours to start and end edge points
+
+    def fit_rectangle_to_points(points):
+        """Fit a minimum area rectangle to a set of points"""
+        if len(points) < 3:
+            if cv2.contourArea(contour) > 2000:
+                print("edge_percentage:", edge_percentage)
+                print("n_points:", n_points)
+                print("points:", sorted_points)
+            raise ValueError(
+                f"Cannot fit rectangle to {len(points)} points. Need at least 3 points."
+            )
+
+        try:
+            # Apply PCA to get principal axes
+            mu, v1, v2, _ = apply_pca(points)
+        except Exception as e:
+            raise ValueError(f"PCA failed for rectangle fitting: {e}")
+
+        # Project points onto principal axes
+        centered_points = points - mu
+        proj_v1 = np.dot(centered_points, v1)
+        proj_v2 = np.dot(centered_points, v2)
+
+        # Find extents along each axis
+        min_v1, max_v1 = np.min(proj_v1), np.max(proj_v1)
+        min_v2, max_v2 = np.min(proj_v2), np.max(proj_v2)
+
+        # Check for degenerate cases
+        if np.isclose(max_v1, min_v1) or np.isclose(max_v2, min_v2):
+            raise ValueError(
+                "Cannot fit rectangle: points are collinear or form a degenerate shape"
+            )
+
+        # Create rectangle corners in projected space
+        corners_proj = np.array(
+            [
+                [min_v1, min_v2],
+                [max_v1, min_v2],
+                [max_v1, max_v2],
+                [min_v1, max_v2],
+                [min_v1, min_v2],
+            ]
+        )
+
+        # Transform back to original coordinate system
+        corners = mu + corners_proj[:, 0:1] * v1 + corners_proj[:, 1:2] * v2
+
+        return corners
+
+    # Fit rectangles to both edge point sets
+    start_rectangle = fit_rectangle_to_points(start_edge_points)
+    end_rectangle = fit_rectangle_to_points(end_edge_points)
+
     # Find where principal axes cross the contours for each edge group
     axis_intersections = []
+    # Find the side of each rectangle that is farthest along the principal axis
+    # Find the center points of each side of both rectangles
+    start_side_centers = []
+    end_side_centers = []
 
-    for edge_points in [start_edge_points, end_edge_points]:
-        # Apply PCA to edge points to find principal axis
-        mu, v1 = get_principal_axis(edge_points)
+    for rectangle, side_centers in [
+        (start_rectangle, start_side_centers),
+        (end_rectangle, end_side_centers),
+    ]:
+        # Calculate center of each side (rectangle has 5 points, last one closes it)
+        for i in range(4):  # 4 sides
+            side_start = rectangle[i]
+            side_end = rectangle[i + 1]
+            side_center = (side_start + side_end) / 2
+            side_centers.append(side_center)
 
-        # Find intersections with contour points
-        distances_to_axis = []
+    # Use the main principal axis of the contour, not the principal axis of the rectangle
+    mu, v1 = get_principal_axis(uniform_contour)
 
-        for point in edge_points:
-            # Calculate distance from point to the principal axis line
-            point_to_mu = point - mu
-            projection_length = np.dot(point_to_mu, v1)
-            projection = projection_length * v1
-            perpendicular = point_to_mu - projection
-            distance_to_axis = np.linalg.norm(perpendicular)
-            distances_to_axis.append((point, distance_to_axis))
+    # Project side centers onto principal axis and find most extreme
+    start_projections = [
+        (np.dot(center - mu, v1), center) for center in start_side_centers
+    ]
+    end_projections = [(np.dot(center - mu, v1), center) for center in end_side_centers]
+    # Find the most extreme (farthest) point along each principal axis
+    start_extreme = max(start_projections, key=lambda x: abs(x[0]))[1]
+    end_extreme = max(end_projections, key=lambda x: abs(x[0]))[1]
 
-        # Find the point closest to the axis (minimum distance)
-        closest_point_data = min(distances_to_axis, key=lambda x: x[1])
-        closest_point = closest_point_data[0]
-        axis_intersections.append(closest_point)
+    axis_intersections = [start_extreme, end_extreme]
 
-    # Redistribute n_points between the edge points in both directions along the contour
     edge_segments = []
-
     for corner_idx in range(len(axis_intersections)):
         start_corner = axis_intersections[corner_idx]
         end_corner = axis_intersections[(corner_idx + 1) % len(axis_intersections)]
@@ -298,8 +362,12 @@ def edge_pca_centerline_from_contour(
     if len(edge_segments) >= 2:
         segment1, segment2 = edge_segments[0], edge_segments[1]
         centerline = (segment1 + segment2) / 2
-        return np.array([centerline[:, 0].tolist(), centerline[:, 1].tolist()])
+        return centerline
     else:
+        if cv2.contourArea(contour) > 2000:
+            print(
+                f":( :( :( Could not extract two edge segments from contour: {len(edge_segments)} found"
+            )
         raise ValueError("Could not extract two edge segments from contour")
 
 
@@ -338,9 +406,15 @@ def calculate_adaptive_parameters(
     length = (arclength - 2 * width) / 2
 
     # Step 4: Calculate parameters
-    edge_percentage = width / length if length > 0 else 0.3
-    try:
-        n_points = int(np.ceil(length))
-    except ValueError:
-        n_points = 0
+    edge_percentage = (
+        (width + length / 2) / (2 * width + 2 * length) if length > 0 else 0.3
+    )
+    n_points = int(np.ceil(length))
+
+    # Apply reasonable bounds
+    edge_percentage = max(
+        0.01, min(0.5, float(edge_percentage))
+    )  # Clamp between 1% and 50%
+    n_points = max(10, min(1000, int(n_points)))  # Clamp between 10 and 1000 points
+
     return edge_percentage, n_points

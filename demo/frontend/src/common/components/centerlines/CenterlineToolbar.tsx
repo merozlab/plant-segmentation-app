@@ -49,8 +49,10 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   const { enqueueMessage } = useMessagesSnackbar();
   const [isLoading, setIsLoading] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [localEdgePercentage, setLocalEdgePercentage] = useState<string>('');
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const debounceEdgePercentageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUserTypingRef = useRef<boolean>(false);
 
   const handleBack = () => {
     onTabChange(DOWNLOAD_TOOLBAR_INDEX); // Go back to More Options tab (index 2)
@@ -130,16 +132,26 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   }, [setCenterlinePoints, fetchCenterlinesPCA, centerlineAlgorithm]);
 
   // Handle edge percentage change with debouncing
-  const handleEdgePercentageChange = useCallback((newPercentage: number | null) => {
-    setCenterlineEdgePercentage(newPercentage);
+  const handleEdgePercentageChange = useCallback((inputValue: string) => {
+    isUserTypingRef.current = true;
+    setLocalEdgePercentage(inputValue);
 
     // Clear existing timeout
     if (debounceEdgePercentageTimeoutRef.current) {
       clearTimeout(debounceEdgePercentageTimeoutRef.current);
     }
 
-    // Set new timeout to fetch centerlines after user stops typing
+    // Set new timeout to update atom and fetch centerlines after user stops typing
     debounceEdgePercentageTimeoutRef.current = setTimeout(() => {
+      isUserTypingRef.current = false;
+      if (inputValue === '') {
+        setCenterlineEdgePercentage(null);
+      } else {
+        const numValue = parseInt(inputValue);
+        if (!isNaN(numValue)) {
+          setCenterlineEdgePercentage(numValue / 100);
+        }
+      }
       fetchCenterlinesPCA(centerlineAlgorithm);
     }, 2000);
   }, [setCenterlineEdgePercentage, fetchCenterlinesPCA, centerlineAlgorithm]);
@@ -153,8 +165,21 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
       if (debounceEdgePercentageTimeoutRef.current) {
         clearTimeout(debounceEdgePercentageTimeoutRef.current);
       }
+      isUserTypingRef.current = false;
     };
   }, []);
+
+  // Initialize local edge percentage from atom (only when not user typing)
+  useEffect(() => {
+    if (!isUserTypingRef.current) {
+      if (centerlineEdgePercentage !== null) {
+        setLocalEdgePercentage(Math.round(centerlineEdgePercentage * 100).toString());
+      } else {
+        setLocalEdgePercentage('');
+      }
+    }
+  }, [centerlineEdgePercentage]);
+
 
   // Auto-switch to pixels when no length scale is available
   useEffect(() => {
@@ -346,37 +371,37 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                       <Information className="w-4 h-4 text-gray-400 hover:text-white cursor-help" />
                     </div>
                   </div>
-                  <input
-                    type="number"
-                    value={centerlineEdgePercentage ? Math.round(centerlineEdgePercentage * 100) : ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '') {
-                        handleEdgePercentageChange(null);
-                      } else {
-                        const numValue = parseInt(value);
-                        if (!isNaN(numValue)) {
-                          handleEdgePercentageChange(numValue / 100);
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={localEdgePercentage}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleEdgePercentageChange(value);
+                      }}
+                      onBlur={(e) => {
+                        // Apply constraints when user finishes editing
+                        const value = e.target.value;
+                        if (value !== '' && !isNaN(parseInt(value))) {
+                          const constrainedValue = Math.max(1, Math.min(50, parseInt(value)));
+                          if (constrainedValue !== parseInt(value)) {
+                            handleEdgePercentageChange(constrainedValue.toString());
+                          }
                         }
-                      }
-                    }}
-                    onBlur={(e) => {
-                      // Apply constraints when user finishes editing
-                      const value = e.target.value;
-                      if (value !== '' && !isNaN(parseInt(value))) {
-                        const constrainedValue = Math.max(1, Math.min(50, parseInt(value)));
-                        if (constrainedValue !== parseInt(value)) {
-                          handleEdgePercentageChange(constrainedValue / 100);
-                        }
-                      }
-                    }}
-                    min={1}
-                    max={50}
-                    step={1}
-                    placeholder="Default: auto"
-                    className="input input-bordered w-full max-w-xs bg-graydark-700 text-white border-graydark-500 focus:border-primary"
-                    disabled={isLoading}
-                  />
+                        // Reset typing flag after blur
+                        setTimeout(() => {
+                          isUserTypingRef.current = false;
+                        }, 100);
+                      }}
+                      min={1}
+                      max={50}
+                      step={1}
+                      placeholder="Default: auto"
+                      className="input input-bordered w-full max-w-xs bg-graydark-700 text-white border-graydark-500 focus:border-primary pr-8"
+                      disabled={isLoading}
+                    />
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">%</span>
+                  </div>
                   <span className="text-gray-400 text-xs">Leave empty for automatic selection (1% - 50% if specified)</span>
                 </div>
               )}
