@@ -50,6 +50,7 @@ ADD https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.
 
 # Copy backend server files for inference service
 COPY demo/backend/server/app_conf.py ${APP_ROOT}/server/
+COPY demo/backend/server/resolution_config.py ${APP_ROOT}/server/
 COPY demo/backend/server/data ${APP_ROOT}/server/data
 COPY demo/backend/server/inference ${APP_ROOT}/server/inference
 COPY demo/backend/server/inference_app.py ${APP_ROOT}/server/

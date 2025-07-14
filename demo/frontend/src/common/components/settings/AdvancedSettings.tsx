@@ -16,7 +16,9 @@
 import { ChevronDown, ChevronUp, Settings } from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
 import { useCallback, useEffect, useState } from 'react';
+import { useAtom, useSetAtom } from 'jotai';
 import { INFERENCE_API_ENDPOINT } from '@/demo/DemoConfig';
+import { selectedModelAtom, selectedResolutionAtom, updateStatusAtom, currentResolutionAtom } from '@/demo/atoms';
 
 const styles = stylex.create({
   container: {
@@ -97,11 +99,42 @@ const styles = stylex.create({
     color: '#44ff44',
     fontSize: '0.75rem',
   },
+  resolutionSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+  },
+  resolutionGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+    gap: 8,
+    marginTop: 8,
+  },
+  resolutionOption: {
+    padding: 8,
+    borderRadius: 4,
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    cursor: 'pointer',
+    textAlign: 'center',
+    fontSize: '0.75rem',
+    transition: 'all 0.2s ease',
+    ':hover': {
+      borderColor: 'rgba(255, 255, 255, 0.3)',
+      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    },
+  },
+  selectedResolution: {
+    borderColor: '#0084ff',
+    backgroundColor: 'rgba(0, 132, 255, 0.1)',
+  },
 });
 
 type ModelInfo = {
   max_frames: number;
   memory_per_frame: string;
+  resolutions?: number[];
+  default_resolution?: number;
+  description?: string;
 };
 
 type GpuInfo = {
@@ -130,8 +163,10 @@ export default function AdvancedSettings() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('small');
-  const [updateStatus, setUpdateStatus] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useAtom(selectedModelAtom);
+  const [selectedResolution, setSelectedResolution] = useAtom(selectedResolutionAtom);
+  const [updateStatus, setUpdateStatus] = useAtom(updateStatusAtom);
+  const setCurrentResolution = useSetAtom(currentResolutionAtom);
 
   const fetchGpuInfo = useCallback(async () => {
     try {
@@ -155,21 +190,34 @@ export default function AdvancedSettings() {
     }
   }, []);
 
-  const handleModelChange = useCallback(async (modelSize: string) => {
+  const handleModelChange = useCallback(async (modelSize: string, resolution?: number) => {
     try {
       setUpdateStatus('Updating...');
+      const requestBody: { model_size: string; resolution?: number } = { model_size: modelSize };
+      if (resolution !== undefined) {
+        requestBody.resolution = resolution;
+      }
+
       const response = await fetch(`${INFERENCE_API_ENDPOINT}/set_model_size`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model_size: modelSize }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         setSelectedModel(modelSize);
+        if (resolution !== undefined) {
+          setSelectedResolution(resolution);
+          setCurrentResolution(resolution);
+        } else if (gpuInfo?.model_estimates[modelSize]?.default_resolution) {
+          const defaultRes = gpuInfo.model_estimates[modelSize].default_resolution!;
+          setSelectedResolution(defaultRes);
+          setCurrentResolution(defaultRes);
+        }
         setUpdateStatus('Model updated! Please refresh the page for changes to take effect.');
         setTimeout(() => setUpdateStatus(''), 3000);
       } else {
@@ -180,7 +228,11 @@ export default function AdvancedSettings() {
       setUpdateStatus('Failed to update model size');
       setTimeout(() => setUpdateStatus(''), 3000);
     }
-  }, []);
+  }, [gpuInfo, setCurrentResolution]);
+
+  const handleResolutionChange = useCallback(async (resolution: number) => {
+    await handleModelChange(selectedModel, resolution);
+  }, [selectedModel, handleModelChange]);
 
   useEffect(() => {
     if (isExpanded && !gpuInfo) {
@@ -255,6 +307,31 @@ export default function AdvancedSettings() {
                       </div>
                     ))}
                   </div>
+
+                  {gpuInfo.model_estimates[selectedModel]?.resolutions && (
+                    <div {...stylex.props(styles.resolutionSection)}>
+                      <div style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
+                        Resolution Selection
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: 8 }}>
+                        Higher resolutions provide better quality but use more memory
+                      </div>
+                      <div {...stylex.props(styles.resolutionGrid)}>
+                        {gpuInfo.model_estimates[selectedModel].resolutions!.map((resolution) => (
+                          <div
+                            key={resolution}
+                            {...stylex.props(
+                              styles.resolutionOption,
+                              selectedResolution === resolution && styles.selectedResolution
+                            )}
+                            onClick={() => handleResolutionChange(resolution)}
+                          >
+                            {resolution}px
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {updateStatus && (
                     <div

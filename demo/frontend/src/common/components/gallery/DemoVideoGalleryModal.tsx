@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom} from '@/demo/atoms';
+import {uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom, selectedResolutionAtom} from '@/demo/atoms';
 import {spacing} from '@/theme/tokens.stylex';
 import {Close, Rotate, RotateClockwise} from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
@@ -245,6 +245,7 @@ export default function DemoVideoGalleryModal({}: Props) {
   const modalRef = useRef<HTMLDialogElement | null>(null);
   const [isOpen, setIsOpen] = useAtom(uploadConfirmationModalAtom);
   const [videoData, setVideoData] = useAtom(uploadedVideoDataAtom);
+  const [selectedResolution] = useAtom(selectedResolutionAtom);
   const navigate = useNavigate();
   const setFrameIndex = useSetAtom(frameIndexAtom);
   const setUploadingState = useSetAtom(uploadingStateAtom);
@@ -259,6 +260,7 @@ export default function DemoVideoGalleryModal({}: Props) {
   const [flipVertical, setFlipVertical] = useState(false);
 
   console.log('DemoVideoGalleryModal render - isOpen:', isOpen, 'videoData:', videoData);
+  console.log('DEBUG DemoVideoGalleryModal render - selectedResolution:', selectedResolution);
 
   const onCropComplete = useCallback((crop: PixelCrop, percentCrop: Crop) => {
     console.log('DemoVideoGalleryModal - crop completed:', crop);
@@ -282,23 +284,54 @@ export default function DemoVideoGalleryModal({}: Props) {
 
   // Calculate if crop will be resized and determine indicator color
   const getCropIndicatorInfo = () => {
+    console.log('DEBUG getCropIndicatorInfo - selectedResolution:', selectedResolution);
+    console.log('DEBUG getCropIndicatorInfo - completedCrop:', completedCrop);
+    console.log('DEBUG getCropIndicatorInfo - videoData:', videoData);
+    
     let width, height;
     
     if (!completedCrop && videoData) {
       // If no crop is set, use full video dimensions
       width = videoData.width;
       height = videoData.height;
+      console.log('DEBUG getCropIndicatorInfo - using full video dimensions:', width, 'x', height);
     } else if (completedCrop) {
       width = completedCrop.width;
       height = completedCrop.height;
+      console.log('DEBUG getCropIndicatorInfo - using completed crop dimensions:', width, 'x', height);
     } else {
-      return { width: 0, height: 0, willResize: false, color: '#fff' };
+      console.log('DEBUG getCropIndicatorInfo - no crop or video data, returning defaults');
+      return { width: 0, height: 0, willResize: false, color: '#fff', resizedWidth: 0, resizedHeight: 0 };
     }
     
-    const willResize = width > 1280 || height > 720;
+    const willResize = width > selectedResolution || height > selectedResolution;
+    console.log('DEBUG getCropIndicatorInfo - willResize:', willResize, '(width:', width, '> selectedResolution:', selectedResolution, 'OR height:', height, '> selectedResolution:', selectedResolution, ')');
+    
     const color = willResize ? '#ff4444' : '#44ff44';
     
-    return { width, height, willResize, color };
+    // Calculate the resized dimensions while preserving aspect ratio
+    let resizedWidth = width;
+    let resizedHeight = height;
+    
+    if (willResize) {
+      const aspectRatio = width / height;
+      console.log('DEBUG getCropIndicatorInfo - aspectRatio:', aspectRatio);
+      
+      if (width > height) {
+        // Landscape: limit by width
+        resizedWidth = selectedResolution;
+        resizedHeight = Math.round(selectedResolution / aspectRatio);
+        console.log('DEBUG getCropIndicatorInfo - landscape resize: width =', resizedWidth, ', height =', resizedHeight);
+      } else {
+        // Portrait or square: limit by height
+        resizedHeight = selectedResolution;
+        resizedWidth = Math.round(selectedResolution * aspectRatio);
+        console.log('DEBUG getCropIndicatorInfo - portrait resize: width =', resizedWidth, ', height =', resizedHeight);
+      }
+    }
+    
+    console.log('DEBUG getCropIndicatorInfo - final result:', { width, height, willResize, color, resizedWidth, resizedHeight });
+    return { width, height, willResize, color, resizedWidth, resizedHeight };
   };
 
   const cropInfo = getCropIndicatorInfo();
@@ -432,7 +465,7 @@ export default function DemoVideoGalleryModal({}: Props) {
                 <div>{cropInfo.width}×{cropInfo.height}px</div>
                 {cropInfo.willResize && (
                   <div style={{ fontSize: '0.75rem', marginTop: '2px', opacity: 0.9 }}>
-                    Will be resized to max 1280×720
+                    Will be resized to {cropInfo.resizedWidth}×{cropInfo.resizedHeight}
                   </div>
                 )}
               </div>

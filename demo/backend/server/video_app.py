@@ -9,6 +9,7 @@ import zipfile
 import time
 import threading
 import subprocess
+import requests
 from typing import Dict, Any, Tuple
 from pathlib import Path
 import os
@@ -37,7 +38,10 @@ from app_conf import (
     UPLOADS_PATH,
     UPLOADS_PREFIX,
     IS_LOCAL_DEPLOYMENT,
+    MODEL_RESOLUTION,
 )
+from resolution_config import get_all_model_info, get_default_resolution
+from app_conf import MODEL_SIZE
 from flask import Flask, make_response, request, Response, send_from_directory
 from flask_cors import CORS
 
@@ -49,9 +53,54 @@ app = Flask(__name__)
 cors = CORS(app, supports_credentials=True)
 
 
+def get_current_resolution() -> int:
+    """Get the current resolution setting, falling back to default if not set."""
+    try:
+        # Try to get resolution from inference API first
+        response = requests.get(f"{INFERENCE_API_URL}/gpu_info", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            # Check if there's a current resolution in the response
+            if 'current_resolution' in data:
+                return data['current_resolution']
+            
+        # If that fails, try app_conf MODEL_RESOLUTION
+        import app_conf
+        if hasattr(app_conf, 'MODEL_RESOLUTION') and app_conf.MODEL_RESOLUTION is not None:
+            return app_conf.MODEL_RESOLUTION
+            
+    except Exception as e:
+        logger.warning(f"Failed to get current resolution from inference API: {e}")
+    
+    # Fall back to default resolution
+    return get_default_resolution(MODEL_SIZE)
+
+
 @app.route("/healthy")
 def healthy() -> Response:
     return make_response("OK", 200)
+
+
+@app.route("/available_models")
+def available_models() -> Response:
+    """Get information about all available model sizes and their resolutions."""
+    try:
+        models_info = get_all_model_info()
+        return make_response(json.dumps(models_info), 200, {"Content-Type": "application/json"})
+    except Exception as e:
+        logger.error(f"Error getting available models: {e}")
+        return make_response(json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"})
+
+
+@app.route("/current_resolution")
+def current_resolution() -> Response:
+    """Get the current resolution setting."""
+    try:
+        resolution = get_current_resolution()
+        return make_response(json.dumps({"resolution": resolution}), 200, {"Content-Type": "application/json"})
+    except Exception as e:
+        logger.error(f"Error getting current resolution: {e}")
+        return make_response(json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"})
 
 
 @app.route(f"/{GALLERY_PREFIX}/<path:path>", methods=["GET"])
@@ -788,8 +837,11 @@ def crop_video():
         # Add crop filter after flips
         filter_parts.append(f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y}")
 
-        # Add scaling after crop to ensure final output is max 1280x720
-        filter_parts.append("scale=1280:720:force_original_aspect_ratio=decrease")
+        # Add scaling after crop to ensure final output respects current resolution limit while preserving aspect ratio
+        current_resolution = get_current_resolution()
+        # Only scale if the cropped video exceeds the resolution limit
+        if crop_width > current_resolution or crop_height > current_resolution:
+            filter_parts.append(f"scale='min({current_resolution},iw)':'min({current_resolution},ih)':force_original_aspect_ratio=decrease")
 
         # Join filters with commas
         filter_string = ",".join(filter_parts)

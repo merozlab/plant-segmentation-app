@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom } from '@/demo/atoms';
+import { uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom, currentResolutionAtom } from '@/demo/atoms';
 import { spacing } from '@/theme/tokens.stylex';
 import { Close, ReflectHorizontal, ReflectVertical } from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
@@ -23,6 +23,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRef, useEffect, useState, useCallback } from 'react';
 import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
+import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import 'react-image-crop/dist/ReactCrop.css';
 // Function to convert dimensions to even numbers and validate
 const makeEvenDimensions = (croppedAreaPixels: any, videoData?: any) => {
@@ -254,6 +255,29 @@ export default function DemoVideoGallery({ }: Props) {
   const [isReuploading, setIsReuploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Resolution state
+  const [currentResolution, setCurrentResolution] = useAtom(currentResolutionAtom);
+
+  // Fetch current resolution from backend when component mounts and when modal opens
+  useEffect(() => {
+    const fetchCurrentResolution = async () => {
+      try {
+        const response = await fetch(`${VIDEO_API_ENDPOINT}/current_resolution`);
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentResolution(data.resolution);
+        }
+      } catch (error) {
+        console.error('Failed to fetch current resolution:', error);
+      }
+    };
+
+    // Fetch on mount and when modal opens
+    if (isOpen) {
+      fetchCurrentResolution();
+    }
+  }, [setCurrentResolution, isOpen]);
+
   console.log('DemoVideoGallery render - isOpen:', isOpen, 'videoData:', videoData, 'isReuploading:', isReuploading);
 
   const onCropComplete = useCallback((crop: PixelCrop, percentCrop: Crop) => {
@@ -357,17 +381,17 @@ export default function DemoVideoGallery({ }: Props) {
       return { width: 0, height: 0, willResize: false, color: '#fff', resizedWidth: 0, resizedHeight: 0 };
     }
 
-    const willResize = width > 1280 || height > 720;
+    const willResize = width > currentResolution || height > currentResolution;
     const color = willResize ? '#ff4444' : '#44ff44';
 
-    // Calculate resized dimensions using aspect ratio preserving resize to fit 1280x720
+    // Calculate resized dimensions using aspect ratio preserving resize to fit within current resolution
     let resizedWidth = width;
     let resizedHeight = height;
 
     if (willResize) {
-      // Calculate scale factor to fit within 1280x720 while preserving aspect ratio
-      const scaleX = 1280 / width;
-      const scaleY = 720 / height;
+      // Calculate scale factor to fit within current resolution while preserving aspect ratio
+      const scaleX = currentResolution / width;
+      const scaleY = currentResolution / height;
       const scale = Math.min(scaleX, scaleY); // Use the smaller scale to ensure it fits
 
       resizedWidth = Math.round(width * scale);
@@ -375,7 +399,7 @@ export default function DemoVideoGallery({ }: Props) {
     }
 
     return { width, height, willResize, color, resizedWidth, resizedHeight };
-  }, [completedCrop, videoData]);
+  }, [completedCrop, videoData, currentResolution]);
 
   const cropInfo = getCropIndicatorInfo();
 
