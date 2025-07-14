@@ -15,6 +15,7 @@
  */
 import '@/assets/scss/App.scss';
 import ErrorReport from '@/common/error/ErrorReport';
+import DemoVideoGallery from '@/common/components/gallery/DemoVideoGallery';
 import DemoErrorFallback from '@/demo/DemoErrorFallback';
 import DemoSuspenseFallback from '@/demo/DemoSuspenseFallback';
 import RelayEnvironmentProvider from '@/graphql/RelayEnvironmentProvider';
@@ -46,6 +47,7 @@ function DemoApp() {
         </Route>
       </Routes>
       <ErrorReport />
+      <DemoVideoGallery />
     </>
   );
 }

@@ -202,13 +202,19 @@ export const uploadErrorMessageAtom = atom<string | null>(null);
 
 export const originalFilePathAtom = atom<string | null>(null);
 
+export const uploadConfirmationModalAtom = atom<boolean>(false);
+
+export const uploadedVideoDataAtom = atom<VideoData | null>(null);
+
 // #####################
 // Centerline algorithm
 // #####################
 
 export const centerlineAlgorithmAtom = atom<'edge' | 'full' | 'skeletonize'>('edge');
 
-export const centerlinePointsAtom = atom<number>(100);
+export const centerlinePointsAtom = atom<number | null>(null);
+
+export const centerlineEdgePercentageAtom = atom<number | null>(null);
 
 export const centerlineUnitsAtom = atom<'pixels' | 'meters'>('pixels');
 
@@ -259,3 +265,10 @@ export const isLengthScaleSetAtom = atom<boolean>(false);
 export const erodeBorderAtom = atom<boolean>(true);
 
 // #####################
+// Resolution Settings
+// #####################
+
+export const currentResolutionAtom = atom<number>(1024);
+export const selectedModelAtom = atom<string>('small');
+export const selectedResolutionAtom = atom<number>(1024);
+export const updateStatusAtom = atom<string>('');

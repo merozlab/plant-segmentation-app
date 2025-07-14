@@ -15,6 +15,16 @@ from typing import Any, Dict, Generator, List
 import numpy as np
 import torch
 from app_conf import APP_ROOT, MODEL_SIZE, UPLOADS_PATH
+from resolution_config import (
+    get_config_path,
+    get_checkpoint_path,
+    get_default_resolution,
+    get_resolution_from_env,
+    validate_resolution,
+    get_model_info,
+    get_max_frames,
+    get_memory_per_frame
+)
 from inference.data_types import (
     AddMaskRequest,
     AddPointsRequest,
@@ -49,18 +59,29 @@ class InferenceAPI:
         self.session_states: Dict[str, Any] = {}
         self.score_thresh = 0
 
-        if MODEL_SIZE == "tiny":
-            checkpoint = Path(APP_ROOT) / "checkpoints/sam2.1_hiera_tiny.pt"
-            model_cfg = "configs/sam2.1/sam2.1_hiera_t.yaml"
-        elif MODEL_SIZE == "small":
-            checkpoint = Path(APP_ROOT) / "checkpoints/sam2.1_hiera_small.pt"
-            model_cfg = "configs/sam2.1/sam2.1_hiera_s.yaml"
-        elif MODEL_SIZE == "large":
-            checkpoint = Path(APP_ROOT) / "checkpoints/sam2.1_hiera_large.pt"
-            model_cfg = "configs/sam2.1/sam2.1_hiera_l.yaml"
-        else:  # base_plus (default)
-            checkpoint = Path(APP_ROOT) / "checkpoints/sam2.1_hiera_base_plus.pt"
-            model_cfg = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+        # Get resolution from environment or use default
+        resolution = get_resolution_from_env()
+        if resolution is None:
+            resolution = get_default_resolution(MODEL_SIZE)
+        
+        # Validate resolution for model size
+        if not validate_resolution(MODEL_SIZE, resolution):
+            logger.warning(f"Resolution {resolution} not supported for model {MODEL_SIZE}, using default")
+            resolution = get_default_resolution(MODEL_SIZE)
+
+        # Get config and checkpoint paths
+        checkpoint = Path(APP_ROOT) / "checkpoints" / get_checkpoint_path(MODEL_SIZE)
+        model_cfg = get_config_path(MODEL_SIZE, resolution)
+        
+        # Store configuration for later use
+        self.model_size = MODEL_SIZE
+        self.resolution = resolution
+        self.model_info = get_model_info(MODEL_SIZE)
+        
+        logger.info(f"Initializing SAM2 with model_size={MODEL_SIZE}, resolution={resolution}")
+        logger.info(f"Using config: {model_cfg}")
+        logger.info(f"Using checkpoint: {checkpoint}")
+        logger.info(f"Model info: {self.model_info}")
 
         # select the device for computation
         force_cpu_device = os.environ.get("SAM2_DEMO_FORCE_CPU_DEVICE", "0") == "1"
@@ -91,6 +112,15 @@ class InferenceAPI:
             model_cfg, checkpoint, device=device
         )
         self.inference_lock = Lock()
+        
+        # Enable memory optimization for better frame capacity
+        if device.type == "cuda":
+            torch.cuda.empty_cache()  # Clear any existing cache
+            # Enable memory efficient attention if available
+            try:
+                torch.backends.cuda.enable_flash_sdp(True)
+            except:
+                pass
 
     def autocast_context(self):
         if self.device.type == "cuda":
@@ -101,9 +131,9 @@ class InferenceAPI:
     def start_session(self, request: StartSessionRequest) -> StartSessionResponse:
         with self.autocast_context(), self.inference_lock:
             session_id = str(uuid.uuid4())
-            # for MPS devices, we offload the video frames to CPU by default to avoid
-            # memory fragmentation in MPS (which sometimes crashes the entire process)
-            offload_video_to_cpu = self.device.type == "mps"
+            # Offload video frames to CPU to save GPU memory for longer videos
+            # This helps process more frames at the cost of slightly slower inference
+            offload_video_to_cpu = self.device.type in ["mps", "cuda"]  # Enable for CUDA as well
             inference_state = self.predictor.init_state(
                 request.path,
                 offload_video_to_cpu=offload_video_to_cpu,
@@ -457,5 +487,61 @@ class InferenceAPI:
             )
             return False
         else:
+            # Clean up GPU memory when closing session
+            if self.device.type == "cuda":
+                try:
+                    # Try to clear any session-specific GPU memory
+                    inference_state = session.get("state")
+                    if inference_state is not None:
+                        # Clear any cached tensors in the inference state
+                        if hasattr(inference_state, 'obj_id_to_frames'):
+                            inference_state.obj_id_to_frames.clear()
+                        if hasattr(inference_state, 'obj_ids_to_obj_idx'):
+                            inference_state.obj_ids_to_obj_idx.clear()
+                    
+                    # Force GPU memory cleanup
+                    torch.cuda.empty_cache()
+                    logger.info(f"GPU memory cleaned for session {session_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean GPU memory for session {session_id}: {e}")
+            
             logger.info(f"removed session {session_id}; {self.__get_session_stats()}")
             return True
+
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get comprehensive model information including resolution and resource usage."""
+        # Get GPU memory info if available
+        gpu_memory_info = {}
+        if torch.cuda.is_available():
+            gpu_memory_info = {
+                "gpu_memory_used_mb": torch.cuda.memory_allocated() // 1024**2,
+                "gpu_memory_reserved_mb": torch.cuda.memory_reserved() // 1024**2,
+                "gpu_memory_total_mb": torch.cuda.get_device_properties(0).total_memory // 1024**2,
+            }
+        
+        # Calculate estimated frame capacity
+        available_memory = gpu_memory_info.get("gpu_memory_total_mb", 10000)
+        estimated_max_frames = get_max_frames(self.model_size, self.resolution, available_memory)
+        memory_per_frame = get_memory_per_frame(self.model_size, self.resolution)
+        
+        return {
+            "model_size": self.model_size,
+            "resolution": self.resolution,
+            "model_info": self.model_info,
+            "estimated_max_frames": estimated_max_frames,
+            "memory_per_frame_mb": memory_per_frame,
+            "device": str(self.device),
+            "active_sessions": len(self.session_states),
+            **gpu_memory_info
+        }
+
+    def get_resource_usage(self) -> Dict[str, Any]:
+        """Get current resource usage statistics."""
+        return {
+            "active_sessions": len(self.session_states),
+            "model_size": self.model_size,
+            "resolution": self.resolution,
+            "memory_per_frame_mb": get_memory_per_frame(self.model_size, self.resolution),
+            "device": str(self.device),
+            "session_stats": self.__get_session_stats()
+        }

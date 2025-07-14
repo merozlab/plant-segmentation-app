@@ -17,7 +17,7 @@ import useUploadVideo from '@/common/components/gallery/useUploadVideo';
 import OptionButton from '@/common/components/options/OptionButton';
 import Logger from '@/common/logger/Logger';
 import useScreenSize from '@/common/screen/useScreenSize';
-import {sessionAtom, uploadingStateAtom} from '@/demo/atoms';
+import {sessionAtom, uploadingStateAtom, uploadConfirmationModalAtom} from '@/demo/atoms';
 import {MAX_UPLOAD_FILE_SIZE} from '@/demo/DemoConfig';
 import {Close, CloudUpload} from '@carbon/icons-react';
 import {useSetAtom} from 'jotai';
@@ -28,12 +28,14 @@ type Props = {
 };
 
 export default function UploadOption({onUpload}: Props) {
+  console.log('UploadOption component rendered');
   const navigate = useNavigate();
   const {isMobile} = useScreenSize();
   const setUploadingState = useSetAtom(uploadingStateAtom);
   const setSession = useSetAtom(sessionAtom);
+  const setUploadConfirmationModal = useSetAtom(uploadConfirmationModalAtom);
 
-  const {getRootProps, getInputProps, isUploading, error} = useUploadVideo({
+  const {isUploading, error} = useUploadVideo({
     onUpload: videoData => {
       navigate(
         {pathname: location.pathname, search: location.search},
@@ -52,35 +54,45 @@ export default function UploadOption({onUpload}: Props) {
     },
   });
 
-  return (
-    <div className="cursor-pointer" {...getRootProps()}>
-      <input {...getInputProps()} />
+  const handleUploadClick = (e: React.MouseEvent) => {
+    console.log('UploadOption - handleUploadClick called');
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('UploadOption - setting uploadConfirmationModal to true');
+    setUploadConfirmationModal(true);
+  };
 
-      <OptionButton
-        variant="gradient"
-        title={
-          error !== null ? (
-            'Upload Error'
-          ) : isMobile ? (
-            <>
-              Upload{' '}
-              <div className="text-xs opacity-70">
-                Max {MAX_UPLOAD_FILE_SIZE}
-              </div>
-            </>
-          ) : (
-            <>
-              Upload another video{' '}
-              <div className="text-xs opacity-70">
-                Max {MAX_UPLOAD_FILE_SIZE}
-              </div>
-            </>
-          )
-        }
-        Icon={error !== null ? Close : CloudUpload}
-        loadingProps={{loading: isUploading, label: 'Uploading...'}}
-        onClick={() => {}}
-      />
-    </div>
+
+
+  return (
+    <>
+      <div className="cursor-pointer" onClick={handleUploadClick}>
+        <OptionButton
+          variant="gradient"
+          title={
+            error !== null ? (
+              'Upload Error'
+            ) : isMobile ? (
+              <>
+                Upload{' '}
+                <div className="text-xs opacity-70">
+                  Max {MAX_UPLOAD_FILE_SIZE}
+                </div>
+              </>
+            ) : (
+              <>
+                Upload another video{' '}
+                <div className="text-xs opacity-70">
+                  Max {MAX_UPLOAD_FILE_SIZE}
+                </div>
+              </>
+            )
+          }
+          Icon={error !== null ? Close : CloudUpload}
+          loadingProps={{loading: isUploading, label: 'Uploading...'}}
+          onClick={() => {}}
+        />
+      </div>
+    </>
   );
 }

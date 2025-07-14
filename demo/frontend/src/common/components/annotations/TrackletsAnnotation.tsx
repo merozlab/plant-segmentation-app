@@ -16,13 +16,13 @@
 import TrackletSwimlane from '@/common/components/annotations/TrackletSwimlane';
 import useTracklets from '@/common/components/annotations/useTracklets';
 import useVideo from '@/common/components/video/editor/useVideo';
-import {BaseTracklet} from '@/common/tracker/Tracker';
-import {m, spacing} from '@/theme/tokens.stylex';
+import { BaseTracklet } from '@/common/tracker/Tracker';
+import { m, spacing } from '@/theme/tokens.stylex';
 import stylex from '@stylexjs/stylex';
 
 const styles = stylex.create({
   container: {
-    overflowY: 'scroll',
+    overflowY: 'auto',
     marginTop: m[3],
     height: 75,
     paddingHorizontal: spacing[4],

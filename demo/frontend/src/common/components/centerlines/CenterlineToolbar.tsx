@@ -17,13 +17,13 @@
 // import ObjectThumbnail from '@/common/components/annotations/ObjectThumbnail';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import { Button } from 'react-daisyui';
-import { ChevronLeft, Download } from '@carbon/icons-react';
+import { ChevronLeft, Download, ChevronDown, ChevronUp, Information } from '@carbon/icons-react';
 import RestartSessionButton from '@/common/components/session/RestartSessionButton';
 import {
   DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom, centerlineUnitsAtom, pixelsToMetersRatioAtom } from '@/demo/atoms';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom, centerlineUnitsAtom, pixelsToMetersRatioAtom, centerlineEdgePercentageAtom } from '@/demo/atoms';
 import { useAtomValue, useAtom, useSetAtom } from 'jotai';
 // import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
@@ -44,10 +44,15 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   const setCenterlinesMap = useSetAtom(centerlinesAtom);
   const [centerlineAlgorithm, setCenterlineAlgorithm] = useAtom(centerlineAlgorithmAtom);
   const [centerlinePoints, setCenterlinePoints] = useAtom(centerlinePointsAtom);
+  const [centerlineEdgePercentage, setCenterlineEdgePercentage] = useAtom(centerlineEdgePercentageAtom);
   const [centerlineUnits, setCenterlineUnits] = useAtom(centerlineUnitsAtom);
   const { enqueueMessage } = useMessagesSnackbar();
   const [isLoading, setIsLoading] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [localEdgePercentage, setLocalEdgePercentage] = useState<string>('');
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceEdgePercentageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUserTypingRef = useRef<boolean>(false);
 
   const handleBack = () => {
     onTabChange(DOWNLOAD_TOOLBAR_INDEX); // Go back to More Options tab (index 2)
@@ -61,15 +66,27 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     }
     try {
       setIsLoading(true);
+      const requestBody: any = {
+        session_id: session.id,
+        safe_folder_name: originalFilePath,
+        pca_algorithm: algorithm,
+        n_points: centerlinePoints
+      };
+
+      // Add edge_percentage if algorithm is 'edge'
+      if (algorithm === 'edge' && centerlineEdgePercentage !== null) {
+        requestBody.edge_percentage = centerlineEdgePercentage;
+      }
+
+      // Only add n_points if it's not null
+      if (centerlinePoints !== null) {
+        requestBody.n_points = centerlinePoints;
+      }
+
       const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: session.id,
-          safe_folder_name: originalFilePath,
-          pca_algorithm: algorithm,
-          n_points: centerlinePoints
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!resp.ok) throw new Error(resp.statusText);
       const data: Record<string, [number[], number[]][]> = await resp.json();
@@ -91,7 +108,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, [session?.id, originalFilePath, trackletObjects, setCenterlinesMap, enqueueMessage, centerlinePoints]);
+  }, [session?.id, originalFilePath, trackletObjects, setCenterlinesMap, enqueueMessage, centerlinePoints, centerlineEdgePercentage]);
 
   // Handle algorithm change
   const handleAlgorithmChange = useCallback(async (newAlgorithm: 'edge' | 'full' | 'skeletonize') => {
@@ -100,7 +117,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   }, [setCenterlineAlgorithm, fetchCenterlinesPCA]);
 
   // Handle points change with debouncing
-  const handlePointsChange = useCallback((newPoints: number) => {
+  const handlePointsChange = useCallback((newPoints: number | null) => {
     setCenterlinePoints(newPoints);
 
     // Clear existing timeout
@@ -114,14 +131,55 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
     }, 2000);
   }, [setCenterlinePoints, fetchCenterlinesPCA, centerlineAlgorithm]);
 
+  // Handle edge percentage change with debouncing
+  const handleEdgePercentageChange = useCallback((inputValue: string) => {
+    isUserTypingRef.current = true;
+    setLocalEdgePercentage(inputValue);
+
+    // Clear existing timeout
+    if (debounceEdgePercentageTimeoutRef.current) {
+      clearTimeout(debounceEdgePercentageTimeoutRef.current);
+    }
+
+    // Set new timeout to update atom and fetch centerlines after user stops typing
+    debounceEdgePercentageTimeoutRef.current = setTimeout(() => {
+      isUserTypingRef.current = false;
+      if (inputValue === '') {
+        setCenterlineEdgePercentage(null);
+      } else {
+        const numValue = parseInt(inputValue);
+        if (!isNaN(numValue)) {
+          setCenterlineEdgePercentage(numValue / 100);
+        }
+      }
+      fetchCenterlinesPCA(centerlineAlgorithm);
+    }, 2000);
+  }, [setCenterlineEdgePercentage, fetchCenterlinesPCA, centerlineAlgorithm]);
+
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
       }
+      if (debounceEdgePercentageTimeoutRef.current) {
+        clearTimeout(debounceEdgePercentageTimeoutRef.current);
+      }
+      isUserTypingRef.current = false;
     };
   }, []);
+
+  // Initialize local edge percentage from atom (only when not user typing)
+  useEffect(() => {
+    if (!isUserTypingRef.current) {
+      if (centerlineEdgePercentage !== null) {
+        setLocalEdgePercentage(Math.round(centerlineEdgePercentage * 100).toString());
+      } else {
+        setLocalEdgePercentage('');
+      }
+    }
+  }, [centerlineEdgePercentage]);
+
 
   // Auto-switch to pixels when no length scale is available
   useEffect(() => {
@@ -197,7 +255,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         description="Choose algorithm and extract centerline"
         className="pb-4"
       />
-      <div className='overflow-y-scroll'>
+      <div className='overflow-y-auto'>
         {/* Algorithm Selection */}
         <div className="p-5 md:p-8 md:pb-0">
           <div className="flex flex-col gap-3">
@@ -215,21 +273,6 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
               <div className="flex flex-col">
                 <span className="text-white font-medium">Edge PCA</span>
                 <span className="text-gray-400 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
-              </div>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="radio"
-                name="centerlineAlgorithm"
-                value="full"
-                checked={centerlineAlgorithm === 'full'}
-                onChange={() => handleAlgorithmChange('full')}
-                className="radio radio-primary"
-                disabled={isLoading}
-              />
-              <div className="flex flex-col">
-                <span className="text-white font-medium">PCA</span>
-                <span className="text-gray-400 text-sm">Breaks the mask into parts along the principal axis and finds the centroid of each part</span>
               </div>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">
@@ -256,24 +299,114 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
           )}
         </div>
 
-        {/* Number of Points Input */}
+        {/* Advanced Options Section */}
         <div className="p-5 md:p-8 md:pb-0">
-          <div className="flex flex-col gap-2">
-            <label className="text-white text-sm font-medium">Number of points</label>
-            <input
-              type="number"
-              value={centerlinePoints}
-              onChange={(e) => {
-                const value = Math.max(50, parseInt(e.target.value) || 50);
-                handlePointsChange(value);
-              }}
-              min={50}
-              max={500}
-              className="input input-bordered w-full max-w-xs bg-graydark-700 text-white border-graydark-500 focus:border-primary"
-              disabled={isLoading}
-            />
-            <span className="text-gray-400 text-xs">Minimum 50 points</span>
-          </div>
+          <button
+            onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+            className="flex items-center justify-between w-full text-left text-white hover:text-gray-300 transition-colors"
+          >
+            <span className="text-sm font-medium">Advanced Options</span>
+            {isAdvancedOpen ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+
+          {isAdvancedOpen && (
+            <div className="mt-4 space-y-6">
+              {/* Number of Points */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-white text-sm font-medium">Number of points</label>
+                  <div
+                    className="tooltip tooltip-top"
+                    data-tip="Specifies how many points to generate along the centerline. Auto setting chooses a number of points according to mask length."
+                  >
+                    <Information className="w-4 h-4 text-gray-400 hover:text-white cursor-help" />
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  value={centerlinePoints || ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      handlePointsChange(null);
+                    } else {
+                      const numValue = parseInt(value);
+                      if (!isNaN(numValue)) {
+                        handlePointsChange(numValue);
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Apply minimum constraint when user finishes editing
+                    const value = e.target.value;
+                    if (value !== '' && !isNaN(parseInt(value))) {
+                      const constrainedValue = Math.max(50, Math.min(500, parseInt(value)));
+                      if (constrainedValue !== parseInt(value)) {
+                        handlePointsChange(constrainedValue);
+                      }
+                    }
+                  }}
+                  min={50}
+                  max={500}
+                  placeholder="Default: auto"
+                  className="input input-bordered w-full max-w-xs bg-graydark-700 text-white border-graydark-500 focus:border-primary"
+                  disabled={isLoading}
+                />
+                <span className="text-gray-400 text-xs">Leave empty for automatic selection (minimum 50 if specified)</span>
+              </div>
+
+              {/* Edge Percentage - Only show when Edge PCA algorithm is selected */}
+              {centerlineAlgorithm === 'edge' && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-white text-sm font-medium">Edge percentage</label>
+                    <div
+                      className="tooltip tooltip-top"
+                      data-tip="Percentage of contour points to use for edge detection. Lower values focus on the tips, higher values include more of the contour."
+                    >
+                      <Information className="w-4 h-4 text-gray-400 hover:text-white cursor-help" />
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={localEdgePercentage}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleEdgePercentageChange(value);
+                      }}
+                      onBlur={(e) => {
+                        // Apply constraints when user finishes editing
+                        const value = e.target.value;
+                        if (value !== '' && !isNaN(parseInt(value))) {
+                          const constrainedValue = Math.max(1, Math.min(50, parseInt(value)));
+                          if (constrainedValue !== parseInt(value)) {
+                            handleEdgePercentageChange(constrainedValue.toString());
+                          }
+                        }
+                        // Reset typing flag after blur
+                        setTimeout(() => {
+                          isUserTypingRef.current = false;
+                        }, 100);
+                      }}
+                      min={1}
+                      max={50}
+                      step={1}
+                      placeholder="Default: auto"
+                      className="input input-bordered w-full max-w-xs bg-graydark-700 text-white border-graydark-500 focus:border-primary pr-8"
+                      disabled={isLoading}
+                    />
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">%</span>
+                  </div>
+                  <span className="text-gray-400 text-xs">Leave empty for automatic selection (1% - 50% if specified)</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Unit Selection */}

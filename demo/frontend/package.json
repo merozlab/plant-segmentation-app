@@ -7,7 +7,7 @@
     "dev": "vite",
     "merge-schemas": "tsx schemas/merge-schemas",
     "relay": "yarn merge-schemas && relay-compiler",
-    "build": "tsc && vite build",
+    "build": "yarn relay && tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview --open"
   },
@@ -28,6 +28,7 @@
     "mp4box": "^0.5.2",
     "pts": "^0.12.8",
     "react": "^18.2.0",
+    "react-image-crop": "11.0.10",
     "react-daisyui": "^4.1.0",
     "react-device-detect": "^2.2.3",
     "react-dom": "^18.2.0",

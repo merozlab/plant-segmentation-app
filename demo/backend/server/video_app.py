@@ -9,6 +9,7 @@ import zipfile
 import time
 import threading
 import subprocess
+import requests
 from typing import Dict, Any, Tuple
 from pathlib import Path
 import os
@@ -26,6 +27,7 @@ from mask_to_curvature import (
     get_centerline_edge_pca,
     get_centerline_skeletonize,
 )
+from edge_pca_centerline import multi_contour_centerlines
 from pycocotools import mask as mask_util
 
 from app_conf import (
@@ -36,7 +38,10 @@ from app_conf import (
     UPLOADS_PATH,
     UPLOADS_PREFIX,
     IS_LOCAL_DEPLOYMENT,
+    MODEL_RESOLUTION,
 )
+from resolution_config import get_all_model_info, get_default_resolution
+from app_conf import MODEL_SIZE
 from flask import Flask, make_response, request, Response, send_from_directory
 from flask_cors import CORS
 
@@ -48,9 +53,54 @@ app = Flask(__name__)
 cors = CORS(app, supports_credentials=True)
 
 
+def get_current_resolution() -> int:
+    """Get the current resolution setting, falling back to default if not set."""
+    try:
+        # Try to get resolution from inference API first
+        response = requests.get(f"{INFERENCE_API_URL}/gpu_info", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            # Check if there's a current resolution in the response
+            if 'current_resolution' in data:
+                return data['current_resolution']
+            
+        # If that fails, try app_conf MODEL_RESOLUTION
+        import app_conf
+        if hasattr(app_conf, 'MODEL_RESOLUTION') and app_conf.MODEL_RESOLUTION is not None:
+            return app_conf.MODEL_RESOLUTION
+            
+    except Exception as e:
+        logger.warning(f"Failed to get current resolution from inference API: {e}")
+    
+    # Fall back to default resolution
+    return get_default_resolution(MODEL_SIZE)
+
+
 @app.route("/healthy")
 def healthy() -> Response:
     return make_response("OK", 200)
+
+
+@app.route("/available_models")
+def available_models() -> Response:
+    """Get information about all available model sizes and their resolutions."""
+    try:
+        models_info = get_all_model_info()
+        return make_response(json.dumps(models_info), 200, {"Content-Type": "application/json"})
+    except Exception as e:
+        logger.error(f"Error getting available models: {e}")
+        return make_response(json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"})
+
+
+@app.route("/current_resolution")
+def current_resolution() -> Response:
+    """Get the current resolution setting."""
+    try:
+        resolution = get_current_resolution()
+        return make_response(json.dumps({"resolution": resolution}), 200, {"Content-Type": "application/json"})
+    except Exception as e:
+        logger.error(f"Error getting current resolution: {e}")
+        return make_response(json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"})
 
 
 @app.route(f"/{GALLERY_PREFIX}/<path:path>", methods=["GET"])
@@ -247,7 +297,9 @@ def centerlines_pca() -> Response:
     data = request.json
     session_id = data["session_id"]
     sfn = data.get("safe_folder_name", None)
-    n_points = data.get("n_points", 100)  # Default to 100 points
+    n_points = data.get("n_points", None)
+    edge_percentage = data.get("edge_percentage", None)
+    print("Received data for centerlines_pca:", data)
     original_file_names = get_original_filenames(sfn) if sfn else None
 
     base = UPLOADS_PATH / session_id
@@ -263,20 +315,48 @@ def centerlines_pca() -> Response:
     for object_dir in masks_dir.iterdir():
         if object_dir.is_dir():
             if data.get("pca_algorithm") == "edge":
-                response[object_dir.name] = [
-                    get_centerline_edge_pca(frame, n_points=n_points)
-                    for frame in sorted(object_dir.glob("*.bmp"))
-                ]
+                frame_centerlines = []
+                for frame in sorted(object_dir.glob("*.bmp")):
+                    # Get all centerlines for this frame (may be multiple contours)
+                    centerlines = multi_contour_centerlines(
+                        str(frame),
+                        n_contours=None,  # Process all contours
+                        edge_percentage=edge_percentage,
+                        n_points=n_points,
+                    )
+                    # Convert from flat array of [x, y] pairs to [x_coordinates, y_coordinates] format
+                    if len(centerlines) > 0:
+                        centerlines_list = centerlines.tolist()
+                        x_coords = [point[0] for point in centerlines_list]
+                        y_coords = [point[1] for point in centerlines_list]
+                        frame_centerlines.append([x_coords, y_coords])
+                    else:
+                        frame_centerlines.append([[], []])
+                response[object_dir.name] = frame_centerlines
             elif data.get("pca_algorithm") == "skeletonize":
-                response[object_dir.name] = [
-                    get_centerline_skeletonize(frame, n_points=n_points)
-                    for frame in sorted(object_dir.glob("*.bmp"))
-                ]
-            else:
-                response[object_dir.name] = [
-                    get_centerline_pca(frame, n_points=n_points)
-                    for frame in sorted(object_dir.glob("*.bmp"))
-                ]
+                frame_centerlines = []
+                for frame in sorted(object_dir.glob("*.bmp")):
+                    try:
+                        # Get centerline for this frame using skeletonize
+                        centerline = get_centerline_skeletonize(
+                            str(frame), n_points=n_points
+                        )
+                        if (
+                            len(centerline) == 2
+                            and len(centerline[0]) > 0
+                            and len(centerline[1]) > 0
+                        ):
+                            frame_centerlines.append(centerline)
+                        else:
+                            # Empty centerline, append empty lists
+                            frame_centerlines.append([[], []])
+                    except Exception as e:
+                        print(
+                            f"Warning: Failed to extract skeleton centerline for frame {frame}: {e}"
+                        )
+                        # Append empty centerline for this frame
+                        frame_centerlines.append([[], []])
+                response[object_dir.name] = frame_centerlines
 
     # Asynchronously save CSVs for each object
     def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):
@@ -470,8 +550,6 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
             "libx264",
             "-pix_fmt",
             "yuv420p",
-            "-vf",
-            "scale=1280:720:force_original_aspect_ratio=decrease",
             video_path,
         ]
 
@@ -587,6 +665,298 @@ else:
     def process_local_folder():
         return make_response(
             "Local folder processing is disabled in this deployment", 403
+        )
+
+
+def get_video_metadata(video_path):
+    """Extract video metadata using ffprobe"""
+    try:
+        cmd = [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            str(video_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return None
+
+        metadata = json.loads(result.stdout)
+
+        # Find video stream
+        video_stream = None
+        for stream in metadata.get("streams", []):
+            if stream.get("codec_type") == "video":
+                video_stream = stream
+                break
+
+        if not video_stream:
+            return None
+
+        return {
+            "width": int(video_stream.get("width", 0)),
+            "height": int(video_stream.get("height", 0)),
+            "codec": video_stream.get("codec_name", "unknown"),
+            "duration": float(video_stream.get("duration", 0)),
+            "frame_rate": video_stream.get("r_frame_rate", "0/0"),
+            "pixel_format": video_stream.get("pix_fmt", "unknown"),
+            "bitrate": video_stream.get("bit_rate", "unknown"),
+        }
+    except Exception as e:
+        print(f"Error extracting video metadata: {str(e)}")
+        return None
+
+
+@app.route("/crop_video", methods=["POST"])
+def crop_video():
+    """Crop a video using the provided coordinates and flip settings"""
+    try:
+        data = request.json
+        if not data:
+            return make_response("No JSON data provided", 400)
+
+        # Extract required parameters
+        video_path = data.get("video_path")
+        crop_x = data.get("crop_x")
+        crop_y = data.get("crop_y")
+        crop_width = data.get("crop_width")
+        crop_height = data.get("crop_height")
+        flip_horizontal = data.get("flip_horizontal", False)
+        flip_vertical = data.get("flip_vertical", False)
+
+        # Validate required parameters
+        if not all(
+            [
+                video_path is not None,
+                crop_x is not None,
+                crop_y is not None,
+                crop_width is not None,
+                crop_height is not None,
+            ]
+        ):
+            return make_response("Missing required crop parameters", 400)
+
+        # Ensure the video path is within uploads directory for security
+        if not (
+            video_path.startswith("uploads/") or video_path.startswith("/uploads/")
+        ):
+            return make_response("Invalid video path", 400)
+
+        # Convert to absolute path by properly handling path prefixes
+        if video_path.startswith("/uploads/"):
+            relative_path = video_path[9:]  # Remove "/uploads/" prefix
+        elif video_path.startswith("uploads/"):
+            relative_path = video_path[8:]  # Remove "uploads/" prefix
+        else:
+            relative_path = video_path
+
+        input_video_path = UPLOADS_PATH / relative_path
+        print(f"Input video path: {input_video_path}")
+        if not input_video_path.exists():
+            return make_response(f"Video file not found: {input_video_path}", 404)
+
+        # Extract video metadata for validation and diagnostics
+        print("Extracting video metadata...")
+        video_metadata = get_video_metadata(input_video_path)
+        if not video_metadata:
+            return make_response("Failed to extract video metadata", 400)
+
+        print(f"Video metadata: {video_metadata}")
+
+        # Validate crop coordinates against video dimensions
+        video_width = video_metadata["width"]
+        video_height = video_metadata["height"]
+
+        # Check if crop coordinates are within video boundaries
+        if crop_x < 0 or crop_y < 0:
+            return make_response(
+                f"Invalid crop coordinates: x={crop_x}, y={crop_y}. Coordinates must be non-negative.",
+                400,
+            )
+
+        if crop_x + crop_width > video_width:
+            return make_response(
+                f"Crop extends beyond video width: crop_x + crop_width ({crop_x + crop_width}) > video_width ({video_width})",
+                400,
+            )
+
+        if crop_y + crop_height > video_height:
+            return make_response(
+                f"Crop extends beyond video height: crop_y + crop_height ({crop_y + crop_height}) > video_height ({video_height})",
+                400,
+            )
+
+        # Validate crop dimensions
+        if crop_width <= 0 or crop_height <= 0:
+            return make_response(
+                f"Invalid crop dimensions: width={crop_width}, height={crop_height}. Dimensions must be positive.",
+                400,
+            )
+
+        # Check for reasonable crop size limits (adjust based on available memory)
+        max_crop_pixels = 16 * 1024 * 1024  # 16M pixels
+        crop_pixels = crop_width * crop_height
+        if crop_pixels > max_crop_pixels:
+            return make_response(
+                f"Crop area too large: {crop_pixels} pixels exceeds maximum {max_crop_pixels} pixels",
+                400,
+            )
+
+        print(
+            f"Crop validation passed: {crop_width}x{crop_height} at ({crop_x}, {crop_y}) within {video_width}x{video_height}"
+        )
+
+        # Generate output filename
+        timestamp = int(time.time())
+        output_filename = f"cropped_{timestamp}_{input_video_path.name}"
+        output_video_path = UPLOADS_PATH / output_filename
+
+        # Build FFmpeg command for cropping
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",  # Overwrite output file
+            "-i",
+            str(input_video_path),
+            "-vf",
+        ]
+
+        # Build video filter string
+        # Apply transformations in correct order: flip first, then crop
+        filter_parts = []
+
+        # Add flip filters first
+        if flip_horizontal:
+            filter_parts.append("hflip")
+        if flip_vertical:
+            filter_parts.append("vflip")
+
+        # Add crop filter after flips
+        filter_parts.append(f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y}")
+
+        # Add scaling after crop to ensure final output respects current resolution limit while preserving aspect ratio
+        current_resolution = get_current_resolution()
+        # Only scale if the cropped video exceeds the resolution limit
+        if crop_width > current_resolution or crop_height > current_resolution:
+            filter_parts.append(f"scale='min({current_resolution},iw)':'min({current_resolution},ih)':force_original_aspect_ratio=decrease")
+
+        # Join filters with commas
+        filter_string = ",".join(filter_parts)
+        ffmpeg_cmd.append(filter_string)
+
+        # Add output codec, frame rate, and path with optimized settings
+        ffmpeg_cmd.extend(
+            [
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "23",
+                "-r",
+                "24",  # Force 24fps output
+                "-threads",
+                "0",  # Use optimal thread count instead of forcing single thread
+                str(output_video_path),
+            ]
+        )
+
+        print(f"Running FFmpeg command: {' '.join(ffmpeg_cmd)}")
+        print(
+            f"Processing {crop_width}x{crop_height} crop from {video_width}x{video_height} video"
+        )
+        print(
+            f"Video codec: {video_metadata['codec']}, duration: {video_metadata['duration']}s"
+        )
+
+        # Execute FFmpeg command with enhanced error handling
+        start_time = time.time()
+        try:
+            result = subprocess.run(
+                ffmpeg_cmd, capture_output=True, text=True, timeout=600
+            )  # 10 minutes timeout
+            processing_time = time.time() - start_time
+            print(f"FFmpeg processing completed in {processing_time:.2f} seconds")
+
+            if result.returncode != 0:
+                # Enhanced error analysis
+                stderr_lines = result.stderr.split("\n")
+                error_summary = []
+
+                # Look for specific error patterns
+                for line in stderr_lines:
+                    if any(
+                        keyword in line.lower()
+                        for keyword in [
+                            "error",
+                            "failed",
+                            "invalid",
+                            "cannot",
+                            "out of memory",
+                        ]
+                    ):
+                        error_summary.append(line.strip())
+
+                print(f"FFmpeg stderr: {result.stderr}")
+                print(f"FFmpeg stdout: {result.stdout}")
+
+                # Provide more specific error messages
+                if "out of memory" in result.stderr.lower():
+                    error_msg = f"Insufficient memory to process crop of {crop_width}x{crop_height} pixels. Try a smaller crop area."
+                elif (
+                    "invalid" in result.stderr.lower()
+                    and "crop" in result.stderr.lower()
+                ):
+                    error_msg = f"Invalid crop parameters for video {video_width}x{video_height}. Crop: {crop_width}x{crop_height} at ({crop_x}, {crop_y})."
+                elif "no space left" in result.stderr.lower():
+                    error_msg = "Insufficient disk space to complete crop operation."
+                else:
+                    error_msg = f"FFmpeg crop failed. Video: {video_width}x{video_height}, Crop: {crop_width}x{crop_height} at ({crop_x}, {crop_y}). Error: {error_summary[:3] if error_summary else result.stderr[:200]}"
+
+                return make_response(error_msg, 500)
+
+        except subprocess.TimeoutExpired:
+            processing_time = time.time() - start_time
+            error_msg = f"Video cropping timed out after {processing_time:.0f} seconds. Video: {video_width}x{video_height}, Crop: {crop_width}x{crop_height}. Try a smaller crop area."
+            print(error_msg)
+            return make_response(error_msg, 500)
+
+        # Verify output file was created and has reasonable size
+        if not output_video_path.exists():
+            return make_response(
+                "FFmpeg completed but output file was not created", 500
+            )
+
+        output_size = output_video_path.stat().st_size
+        if output_size == 0:
+            return make_response("FFmpeg completed but output file is empty", 500)
+
+        print(
+            f"Crop operation successful. Output file: {output_filename}, size: {output_size} bytes"
+        )
+
+        # Return success response with output path and metadata
+        output_path = f"/uploads/{output_filename}"
+        return make_response(
+            {
+                "status": "success",
+                "output_path": output_path,
+                "message": "Video cropped successfully",
+                "processing_time": processing_time,
+                "output_size": output_size,
+                "original_dimensions": f"{video_width}x{video_height}",
+                "crop_dimensions": f"{crop_width}x{crop_height}",
+            },
+            200,
+        )
+
+    except Exception as e:
+        print(f"Error cropping video: {str(e)}")
+        return make_response(
+            f"Internal server error during crop operation: {str(e)}", 500
         )
 
 

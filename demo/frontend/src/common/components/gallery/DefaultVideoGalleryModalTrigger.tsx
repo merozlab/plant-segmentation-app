@@ -17,27 +17,26 @@ import useUploadVideo from '@/common/components/gallery/useUploadVideo';
 import OptionButton from '@/common/components/options/OptionButton';
 import Logger from '@/common/logger/Logger';
 import useScreenSize from '@/common/screen/useScreenSize';
-import { sessionAtom, uploadingStateAtom, uploadErrorMessageAtom } from '@/demo/atoms';
+import { uploadingStateAtom, uploadErrorMessageAtom, uploadConfirmationModalAtom, uploadedVideoDataAtom } from '@/demo/atoms';
 import { Close, CloudUpload } from '@carbon/icons-react';
 import { useSetAtom } from 'jotai';
-import { useNavigate } from 'react-router-dom';
 import { MAX_FILE_SIZE_IN_MB, MAX_ZIP_FILE_SIZE_MB } from '@/demo/DemoConfig';
 
 
 export default function DefaultVideoGalleryModalTrigger() {
-  const navigate = useNavigate();
+  console.log('DefaultVideoGalleryModalTrigger component rendered');
   const { isMobile } = useScreenSize();
   const setUploadingState = useSetAtom(uploadingStateAtom);
-  const setSession = useSetAtom(sessionAtom);
   const setUploadErrorMessage = useSetAtom(uploadErrorMessageAtom);
+  const setUploadConfirmationModal = useSetAtom(uploadConfirmationModalAtom);
+  const setUploadedVideoData = useSetAtom(uploadedVideoDataAtom);
 
   const handleUpload = (videoData: any) => {
-    navigate(
-      { pathname: location.pathname, search: location.search },
-      { state: { video: videoData } },
-    );
-    setUploadingState('default');
-    setSession(null);
+    console.log('DefaultVideoGalleryModalTrigger - raw file uploaded, showing crop modal');
+    // Store the raw video data and show crop modal immediately (before processing)
+    setUploadedVideoData(videoData);
+    setUploadConfirmationModal(true);
+    // Keep the uploading state to show loading on trigger
   };
 
   const {
@@ -48,17 +47,19 @@ export default function DefaultVideoGalleryModalTrigger() {
   } = useUploadVideo({
     onUpload: handleUpload,
     onUploadError: (error: Error) => {
+      console.log('DefaultVideoGalleryModalTrigger - onUploadError called:', error);
       setUploadingState('error');
       Logger.error(error);
     },
     onUploadStart: () => {
+      console.log('DefaultVideoGalleryModalTrigger - onUploadStart called');
       setUploadingState('uploading');
     },
     setGlobalErrorMessage: setUploadErrorMessage,
   });
 
   return (
-    <div className="flex flex-col gap-2 mb-4">
+    <div className="flex flex-col gap-2 mb-4 mt-8">
       <div className="cursor-pointer flex flex-col gap-4" {...getRootProps()}>
         <input {...getInputProps()} />
         <OptionButton
@@ -83,11 +84,10 @@ export default function DefaultVideoGalleryModalTrigger() {
             )
           }
           Icon={error !== null ? Close : CloudUpload}
-          loadingProps={{ loading: isUploading, label: isUploading ? 'Uploading or processing...' : 'Uploading...' }}
+          loadingProps={{ loading: isUploading, label: 'Uploading...' }}
           onClick={() => { }}
         />
       </div>
-
     </div>
   );
 }
