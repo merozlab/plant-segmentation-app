@@ -4,7 +4,7 @@ FROM python:3.10-slim
 ENV APP_ROOT=/opt/sam2
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=video_app
-ENV FLASK_ENV=development
+ENV FLASK_ENV=production
 
 # Install system requirements
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,6 +25,7 @@ RUN pip install \
     Flask==2.2.3 \
     Flask-Cors==3.0.10 \
     requests==2.28.2 \
+    gunicorn>=23.0.0 \
     # Video processing
     av>=13.0.0 \
     eva-decord>=0.6.1 \
@@ -54,5 +55,13 @@ COPY demo/backend/server/edge_pca_centerline.py ${APP_ROOT}/server/
 
 WORKDIR ${APP_ROOT}/server
 
-# Run Flask app
-CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
+# Run with Gunicorn production server
+CMD gunicorn --worker-tmp-dir /dev/shm \
+    --worker-class gthread video_app:app \
+    --log-level info \
+    --access-logfile /dev/stdout \
+    --log-file /dev/stderr \
+    --workers 2 \
+    --threads 2 \
+    --bind 0.0.0.0:5000 \
+    --timeout 60

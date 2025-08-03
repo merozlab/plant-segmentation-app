@@ -37,7 +37,6 @@ type Props = {
 export default function EffectsToolbarBottomActions({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom); // Get the current session
   const originalFilePath = useAtomValue(originalFilePathAtom);
-  console.log('originalFilePath', originalFilePath);
   const [, setMasksReady] = useAtom(masksReadyAtom); // We only need the setter here
   const { enqueueMessage, clearMessage } = useMessagesSnackbar();
   const [isLoading, setIsLoading] = useState(false);

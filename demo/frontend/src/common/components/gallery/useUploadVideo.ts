@@ -132,7 +132,6 @@ export default function useUploadVideo({
       try {
         // Make sure videoUrl is properly formatted
         const finalUrl = videoUrl.startsWith('/') ? `${VIDEO_API_ENDPOINT}${videoUrl}` : `${VIDEO_API_ENDPOINT}/${videoUrl}`;
-        console.log("Local folder processing - Final video URL:", finalUrl);
 
         // Path for startSession should include /uploads prefix
         const sanitizedUrl = videoUrl.replace(/\.mp4$/, '');

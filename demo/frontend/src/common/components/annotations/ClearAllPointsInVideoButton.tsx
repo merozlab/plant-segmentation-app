@@ -46,27 +46,19 @@ export default function ClearAllPointsInVideoButton({ onRestart }: Props) {
 
   async function handleRestart() {
     if (video === null) {
-      console.log('Video is not available');
       return;
     }
 
     setIsLoading(true);
     if (isPlaying) {
-      console.log('Pausing video');
       video.pause();
     }
     if (isStreaming) {
-      console.log('Aborting stream masks');
       await video.abortStreamMasks();
     }
     const isSuccessful = await video.clearPointsInVideo();
-    if (isSuccessful) {
-      console.log('Points cleared successfully');
-    } else {
-      console.log('Failed to clear points');
-    }
+
     if (!isSuccessful) {
-      console.log('Restarting session due to failure');
       await restartSession();
     }
     video.frame = 0;

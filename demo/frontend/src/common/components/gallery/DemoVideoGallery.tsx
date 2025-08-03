@@ -92,8 +92,6 @@ const cropVideoOnBackend = async (videoPath: string, cropSettings: any, videoDat
     flip_vertical: flipVertical || false
   };
 
-  console.log('Sending crop request to backend:', requestBody);
-
   const response = await fetch('http://localhost:7264/crop_video', {
     method: 'POST',
     headers: {
@@ -119,7 +117,6 @@ const cropVideoOnBackend = async (videoPath: string, cropSettings: any, videoDat
   const result = await response.json();
 
   if (result.status === 'success') {
-    console.log('Video cropped successfully:', result.output_path);
     return result.output_path; // Should return path like "/uploads/cropped_video_123.mp4"
   } else {
     throw new Error(result.message || 'Backend crop failed');
@@ -128,13 +125,10 @@ const cropVideoOnBackend = async (videoPath: string, cropSettings: any, videoDat
 
 // Function to process video with crop and flip data using backend
 const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
-  console.log('Processing video with crop settings:', cropSettings);
 
   try {
     // Convert crop dimensions to even numbers and validate
     const evenCroppedAreaPixels = makeEvenDimensions(cropSettings.croppedAreaPixels, videoData);
-    console.log('Original crop dimensions:', cropSettings.croppedAreaPixels);
-    console.log('Even crop dimensions:', evenCroppedAreaPixels);
 
     // If no changes were made (default crop, no flip), return original video
     if (!evenCroppedAreaPixels &&
@@ -144,13 +138,11 @@ const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
       cropSettings.crop.y === 0 &&
       cropSettings.crop.width === 100 &&
       cropSettings.crop.height === 100) {
-      console.log('No changes made, returning original video');
       return videoData;
     }
 
     // Actually crop the video if crop area is specified
     if (evenCroppedAreaPixels) {
-      console.log('Cropping video using backend...');
       const croppedVideoPath = await cropVideoOnBackend(videoData.path, {
         croppedAreaPixels: evenCroppedAreaPixels,
         flipHorizontal: cropSettings.flipHorizontal,
@@ -278,11 +270,8 @@ export default function DemoVideoGallery({ }: Props) {
     }
   }, [setCurrentResolution, isOpen]);
 
-  console.log('DemoVideoGallery render - isOpen:', isOpen, 'videoData:', videoData, 'isReuploading:', isReuploading);
 
   const onCropComplete = useCallback((crop: PixelCrop, percentCrop: Crop) => {
-    console.log('DemoVideoGallery - crop completed:', crop);
-    console.log('DemoVideoGallery - percent crop:', percentCrop);
 
     // Calculate crop coordinates relative to original video dimensions
     // The crop coordinates should be based on the actual pixel coordinates from react-image-crop
@@ -325,15 +314,6 @@ export default function DemoVideoGallery({ }: Props) {
           unit: 'px' as const
         };
 
-        console.log('DemoVideoGallery - display dimensions:', displayWidth, 'x', displayHeight);
-        console.log('DemoVideoGallery - scale factors:', scaleX, scaleY);
-        console.log('DemoVideoGallery - raw calculated crop:', {
-          x: Math.round(crop.x * scaleX),
-          y: Math.round(crop.y * scaleY), 
-          width: Math.round(crop.width * scaleX),
-          height: Math.round(crop.height * scaleY)
-        });
-        console.log('DemoVideoGallery - clamped crop for original video:', scaledCrop);
         setCompletedCrop(scaledCrop);
       } else {
         // Fallback to percentage-based calculation with boundary clamping
@@ -357,7 +337,6 @@ export default function DemoVideoGallery({ }: Props) {
           height: fallbackHeight,
           unit: 'px' as const
         };
-        console.log('DemoVideoGallery - fallback crop calculation:', fallbackCrop);
         setCompletedCrop(fallbackCrop);
       }
     } else {
@@ -439,14 +418,12 @@ export default function DemoVideoGallery({ }: Props) {
   }, [videoData, isReuploading, setUploadingState]);
 
   const handleClose = () => {
-    console.log('DemoVideoGallery - handleClose called');
     setIsOpen(false);
     // Reset uploading state when modal is closed
     setUploadingState('default');
   };
 
   const handleReupload = () => {
-    console.log('DemoVideoGallery - handleReupload called');
     // Set reuploading state first
     setIsReuploading(true);
     setUploadingState('uploading');
@@ -474,7 +451,6 @@ export default function DemoVideoGallery({ }: Props) {
   }, [flipVertical]);
 
   const handleContinue = async () => {
-    console.log('DemoVideoGallery - handleContinue called');
     setErrorMessage(null); // Clear any previous errors
     
     if (videoData) {
@@ -488,8 +464,6 @@ export default function DemoVideoGallery({ }: Props) {
           flipVertical,
           croppedAreaPixels: completedCrop
         });
-
-        console.log('Processed video data:', processedVideoData);
 
         // Close modal and navigate on success
         setIsOpen(false);

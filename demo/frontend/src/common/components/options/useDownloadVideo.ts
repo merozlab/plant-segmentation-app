@@ -114,11 +114,9 @@ export default function useDownloadVideo(): State {
   }
 
   async function saveVideoAsFrames() {
-    console.log("Starting mask generation and download process");
 
     if (!session?.id) {
       enqueueMessage('❌ Error: No active session found.', { type: 'warning' });
-      console.error("No session ID available for maskify request");
       setFrameExtractionInProgress(false);
       return;
     }
@@ -164,7 +162,6 @@ export default function useDownloadVideo(): State {
 
       // Get the zip file as a blob
       const zipBlob = await response.blob();
-      console.log(`ZIP file received. Size: ${zipBlob.size} bytes`);
       setProgress(90);
       setModalProgress(90);
 

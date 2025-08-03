@@ -57,7 +57,6 @@ const cropVideoOnBackend = async (videoPath: string, cropSettings: any): Promise
     flip_vertical: flipVertical || false
   };
   
-  console.log('Sending crop request to backend:', requestBody);
   
   const response = await fetch('http://localhost:7264/crop_video', {
     method: 'POST',
@@ -74,7 +73,6 @@ const cropVideoOnBackend = async (videoPath: string, cropSettings: any): Promise
   const result = await response.json();
   
   if (result.status === 'success') {
-    console.log('Video cropped successfully:', result.output_path);
     return result.output_path; // Should return path like "/uploads/cropped_video_123.mp4"
   } else {
     throw new Error(result.message || 'Backend crop failed');
@@ -83,12 +81,9 @@ const cropVideoOnBackend = async (videoPath: string, cropSettings: any): Promise
 
 // Function to process video with crop and flip data using backend
 const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
-  console.log('Processing video with crop settings:', cropSettings);
   
   // Convert crop dimensions to even numbers
   const evenCroppedAreaPixels = makeEvenDimensions(cropSettings.croppedAreaPixels);
-  console.log('Original crop dimensions:', cropSettings.croppedAreaPixels);
-  console.log('Even crop dimensions:', evenCroppedAreaPixels);
   
   // If no changes were made (default crop, no flip), return original video
   if (!evenCroppedAreaPixels && 
@@ -99,14 +94,12 @@ const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
       cropSettings.crop.width === 100 && 
       cropSettings.crop.height === 100 && 
       cropSettings.zoom === 1) {
-    console.log('No changes made, returning original video');
     return videoData;
   }
   
   // Actually crop the video if crop area is specified
   if (evenCroppedAreaPixels) {
     try {
-      console.log('Cropping video using backend...');
       const croppedVideoPath = await cropVideoOnBackend(videoData.path, {
         croppedAreaPixels: evenCroppedAreaPixels,
         flipHorizontal: cropSettings.flipHorizontal,
@@ -122,7 +115,6 @@ const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
         isCropped: true,
       };
     } catch (error) {
-      console.error('Error cropping video:', error);
       // Fall back to original video with metadata if cropping fails
     }
   }
@@ -259,12 +251,8 @@ export default function DemoVideoGalleryModal({}: Props) {
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [flipVertical, setFlipVertical] = useState(false);
 
-  console.log('DemoVideoGalleryModal render - isOpen:', isOpen, 'videoData:', videoData);
-  console.log('DEBUG DemoVideoGalleryModal render - selectedResolution:', selectedResolution);
 
   const onCropComplete = useCallback((crop: PixelCrop, percentCrop: Crop) => {
-    console.log('DemoVideoGalleryModal - crop completed:', crop);
-    console.log('DemoVideoGalleryModal - percent crop:', percentCrop);
     
     // Calculate crop coordinates relative to original video dimensions
     if (videoData) {
@@ -275,7 +263,6 @@ export default function DemoVideoGalleryModal({}: Props) {
         height: Math.round((percentCrop.height / 100) * videoData.height),
         unit: 'px' as const
       };
-      console.log('DemoVideoGalleryModal - scaled crop for original video:', scaledCrop);
       setCompletedCrop(scaledCrop);
     } else {
       setCompletedCrop(crop);
@@ -284,9 +271,6 @@ export default function DemoVideoGalleryModal({}: Props) {
 
   // Calculate if crop will be resized and determine indicator color
   const getCropIndicatorInfo = () => {
-    console.log('DEBUG getCropIndicatorInfo - selectedResolution:', selectedResolution);
-    console.log('DEBUG getCropIndicatorInfo - completedCrop:', completedCrop);
-    console.log('DEBUG getCropIndicatorInfo - videoData:', videoData);
     
     let width, height;
     
@@ -294,19 +278,14 @@ export default function DemoVideoGalleryModal({}: Props) {
       // If no crop is set, use full video dimensions
       width = videoData.width;
       height = videoData.height;
-      console.log('DEBUG getCropIndicatorInfo - using full video dimensions:', width, 'x', height);
     } else if (completedCrop) {
       width = completedCrop.width;
       height = completedCrop.height;
-      console.log('DEBUG getCropIndicatorInfo - using completed crop dimensions:', width, 'x', height);
     } else {
-      console.log('DEBUG getCropIndicatorInfo - no crop or video data, returning defaults');
       return { width: 0, height: 0, willResize: false, color: '#fff', resizedWidth: 0, resizedHeight: 0 };
     }
     
-    const willResize = width > selectedResolution || height > selectedResolution;
-    console.log('DEBUG getCropIndicatorInfo - willResize:', willResize, '(width:', width, '> selectedResolution:', selectedResolution, 'OR height:', height, '> selectedResolution:', selectedResolution, ')');
-    
+    const willResize = width > selectedResolution || height > selectedResolution;    
     const color = willResize ? '#ff4444' : '#44ff44';
     
     // Calculate the resized dimensions while preserving aspect ratio
@@ -315,22 +294,18 @@ export default function DemoVideoGalleryModal({}: Props) {
     
     if (willResize) {
       const aspectRatio = width / height;
-      console.log('DEBUG getCropIndicatorInfo - aspectRatio:', aspectRatio);
       
       if (width > height) {
         // Landscape: limit by width
         resizedWidth = selectedResolution;
         resizedHeight = Math.round(selectedResolution / aspectRatio);
-        console.log('DEBUG getCropIndicatorInfo - landscape resize: width =', resizedWidth, ', height =', resizedHeight);
       } else {
         // Portrait or square: limit by height
         resizedHeight = selectedResolution;
         resizedWidth = Math.round(selectedResolution * aspectRatio);
-        console.log('DEBUG getCropIndicatorInfo - portrait resize: width =', resizedWidth, ', height =', resizedHeight);
       }
     }
     
-    console.log('DEBUG getCropIndicatorInfo - final result:', { width, height, willResize, color, resizedWidth, resizedHeight });
     return { width, height, willResize, color, resizedWidth, resizedHeight };
   };
 
@@ -361,12 +336,10 @@ export default function DemoVideoGalleryModal({}: Props) {
   }, [isOpen]);
 
   const handleClose = () => {
-    console.log('DemoVideoGalleryModal - handleClose called');
     setIsOpen(false);
   };
 
   const handleReupload = () => {
-    console.log('DemoVideoGalleryModal - handleReupload called');
     setIsOpen(false);
     // Reset state and allow user to upload another file
     setVideoData(null);
@@ -385,7 +358,6 @@ export default function DemoVideoGalleryModal({}: Props) {
   }, [flipVertical]);
 
   const handleContinue = async () => {
-    console.log('DemoVideoGalleryModal - handleContinue called');
     setIsOpen(false);
     if (videoData) {
       setUploadingState('uploading');
@@ -400,7 +372,6 @@ export default function DemoVideoGalleryModal({}: Props) {
           croppedAreaPixels: completedCrop
         });
         
-        console.log('Processed video data:', processedVideoData);
         
         // Navigate with the processed video data (cropped or original)
         navigate(

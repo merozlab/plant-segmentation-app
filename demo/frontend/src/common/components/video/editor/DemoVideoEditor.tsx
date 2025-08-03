@@ -264,104 +264,7 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
 
     handleOptimisticPointUpdate(points.filter(p => p !== point));
   }
-  // async function handleOptimisticBasePointUpdate(newPoint: SegmentationPoint) {
-  //   if (session == null) {
-  //     return;
-  //   }
-
-  //   function setBasePointForActiveTracklet(basePoint: SegmentationPoint) {
-  //     if (activeTrackletId === null) {
-  //       return;
-  //     }
-  //     // Create a copy with the updated basePoint for the active tracklet
-  //     const updatedTracklets = trackletObjects.map(tracklet => {
-  //       if (tracklet.id === activeTrackletId) {
-  //         return {
-  //           ...tracklet,
-  //           basePoint: basePoint
-  //         };
-  //       }
-  //       return tracklet;
-  //     });
-  //     setTrackletObjects(updatedTracklets);
-  //   }
-  //   if (activeTrackletId != null) {
-  //     setBasePointForActiveTracklet(newPoint);
-  //     console.log('Setting base point', newPoint);
-  //     const currentIndex = trackletObjects.findIndex(t => t.id === activeTrackletId);
-
-  //     // Find all tracklets that do not have a basePoint set (excluding the current one)
-  //     const unselectedBasePointIndexes = trackletObjects
-  //       .map((t, idx) => ({ idx, hasBasePoint: !!t.basePoint }))
-  //       .filter(({ idx, hasBasePoint }) => !hasBasePoint && idx !== currentIndex)
-  //       .map(({ idx }) => idx);
-
-  //     let nextIndex: number | null = null;
-
-  //     if (currentIndex < trackletObjects.length - 1) {
-  //       // Default: move to next index
-  //       nextIndex = currentIndex + 1;
-  //     } else if (unselectedBasePointIndexes.length > 0) {
-  //       // At last index: move to first index without a basePoint
-  //       nextIndex = unselectedBasePointIndexes[0];
-  //     }
-
-  //     if (
-  //       nextIndex !== null &&
-  //       nextIndex >= 0 &&
-  //       nextIndex < trackletObjects.length
-  //     ) {
-  //       setActiveTrackletObjectId(trackletObjects[nextIndex].id);
-  //       console.log('set next tracklet id:', trackletObjects[nextIndex].id);
-  //     }
-  //   } else {
-  //     console.log('Missing tracklet');
-  //   }
-  // }
-
-  // async function handleAddBasePoint(point: SegmentationPoint) {
-  //   if (streamingState === 'partial' || streamingState === 'requesting') {
-  //     return;
-  //   }
-  //   if (isPlaying) {
-  //     return video?.pause();
-  //   }
-  //   if (basePoints.length >= trackletObjects.length) {
-  //     return;
-  //   }
-  //   setBasePoints([...basePoints, point]);
-  //   handleOptimisticBasePointUpdate(point);
-  //   // only fetch centerline if session and object valid
-  //   if (!session?.id || activeTrackletId == null) {
-  //     return;
-  //   }
-  //   const objectIndex = trackletObjects.findIndex(t => t.id === activeTrackletId);
-  //   if (objectIndex < 0) {
-  //     return;
-  //   }
-  //   try {
-  //     const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
-  //       method: 'POST',
-  //       headers: { 'Content-Type': 'application/json' },
-  //       body: JSON.stringify({ session_id: session.id, object: `object_${objectIndex + 1}` }),
-  //     });
-  //     if (!resp.ok) {
-  //       console.error('Centerline fetch failed', resp.statusText);
-  //       return;
-  //     }
-  //     // Backend returns an array per frame: [xs[], ys[]]
-  //     const data: Array<[number[], number[]]> = await resp.json();
-  //     const mapping: Record<number, [number, number][]> = {};
-  //     data.forEach(([xs, ys], idx) => {
-  //       mapping[idx] = xs.map((x, i) => [x, ys[i]]);
-  //     });
-  //     setCenterlinesMap(prev => ({ ...prev, [activeTrackletId]: mapping }));
-  //   } catch (e) {
-  //     console.error('Centerline fetch error', e);
-  //   }
-  // }
-  // Length scale doesn't need optimistic updates like tracklets
-  // The state is managed directly through atoms
+  
   function handleOptimisticLengthScalePointUpdate(_point: LengthScalePoint) {
     // This function is kept for consistency but doesn't need to do anything
     // since length scale points are managed directly through atoms
@@ -369,22 +272,6 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
   }
 
 
-
-
-  // // Convert SegmentationPoint to LengthScalePoint (remove the label)
-  // const lengthScalePoint: LengthScalePoint = [point[0], point[1]];
-
-  // // Don't add points if we already have both
-  // if (lengthScaleStartPoint && lengthScaleEndPoint) {
-  //   return;
-  // }
-
-  // if (!lengthScaleStartPoint) {
-  //   setLengthScaleStartPoint(lengthScalePoint);
-  // } else if (!lengthScaleEndPoint) {
-  //   setLengthScaleEndPoint(lengthScalePoint);
-  // }
-  // Handle length scale point addition
   function handleAddLengthScalePoint(point: SegmentationPoint) {
     if (!isLengthScaleEnabled) {
       return;
@@ -442,50 +329,6 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
       setLengthScaleEndPoint(null);
     }
   }
-
-  // async function handleOptimisticRemoveBasePointUpdate(point: SegmentationPoint) {
-  //   if (session == null) {
-  //     return;
-  //   }
-  //   if (activeTrackletId != null) {
-  //     const trackletWithSameBasePoint = trackletObjects.find(
-  //       t => t.basePoint && t.basePoint[0] === point?.[0] && t.basePoint[1] === point?.[1]
-  //     );
-  //     if (trackletWithSameBasePoint) {
-  //       const updatedTracklets = trackletObjects.map(tracklet => {
-  //         if (
-  //           tracklet.id === trackletWithSameBasePoint.id
-  //         ) {
-  //           return {
-  //             ...tracklet,
-  //             basePoint: null,
-  //           };
-  //         }
-  //         return tracklet;
-  //       });
-  //       setTrackletObjects(updatedTracklets);
-  //     }
-  //     return;
-  //   }
-  // }
-
-  // function handleRemoveBasePoint(point: SegmentationPoint) {
-  //   if (
-  //     isPlaying ||
-  //     streamingState === 'partial' ||
-  //     streamingState === 'requesting'
-  //   ) {
-  //     return;
-  //   }
-  //   console.log('Removing base point', point);
-  //   setBasePoints(basePoints.filter(p => p !== point));
-  //   handleOptimisticRemoveBasePointUpdate(point);
-  // }
-  // The interaction layer handles clicks onto the video canvas. It is used
-  // to get absolute point clicks within the video's coordinate system.
-  // The PointsLayer handles rendering of input points and allows removing
-  // individual points by clicking on them.
-
 
 
   const layers = (

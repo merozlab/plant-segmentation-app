@@ -163,7 +163,6 @@ export default forwardRef<VideoRef, Props>(function Video(
   const canvasHeight = useMemo(() => {
     const resizeRatio = resizeWidth / width;
     const calculatedHeight = Math.min(height * resizeRatio, resizeHeight);
-    console.log('Video resize dimensions:', { resizeWidth, resizeHeight, calculatedHeight });
     return calculatedHeight > 1 ? calculatedHeight : 400; // Ensure a minimum height of 400px
   }, [resizeWidth, height, width, resizeHeight]);
 

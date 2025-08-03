@@ -24,7 +24,6 @@ import { MAX_FILE_SIZE_IN_MB, MAX_ZIP_FILE_SIZE_MB } from '@/demo/DemoConfig';
 
 
 export default function DefaultVideoGalleryModalTrigger() {
-  console.log('DefaultVideoGalleryModalTrigger component rendered');
   const { isMobile } = useScreenSize();
   const setUploadingState = useSetAtom(uploadingStateAtom);
   const setUploadErrorMessage = useSetAtom(uploadErrorMessageAtom);
@@ -32,7 +31,6 @@ export default function DefaultVideoGalleryModalTrigger() {
   const setUploadedVideoData = useSetAtom(uploadedVideoDataAtom);
 
   const handleUpload = (videoData: any) => {
-    console.log('DefaultVideoGalleryModalTrigger - raw file uploaded, showing crop modal');
     // Store the raw video data and show crop modal immediately (before processing)
     setUploadedVideoData(videoData);
     setUploadConfirmationModal(true);
@@ -47,12 +45,10 @@ export default function DefaultVideoGalleryModalTrigger() {
   } = useUploadVideo({
     onUpload: handleUpload,
     onUploadError: (error: Error) => {
-      console.log('DefaultVideoGalleryModalTrigger - onUploadError called:', error);
       setUploadingState('error');
       Logger.error(error);
     },
     onUploadStart: () => {
-      console.log('DefaultVideoGalleryModalTrigger - onUploadStart called');
       setUploadingState('uploading');
     },
     setGlobalErrorMessage: setUploadErrorMessage,

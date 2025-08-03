@@ -28,7 +28,6 @@ type Props = {
 };
 
 export default function UploadOption({onUpload}: Props) {
-  console.log('UploadOption component rendered');
   const navigate = useNavigate();
   const {isMobile} = useScreenSize();
   const setUploadingState = useSetAtom(uploadingStateAtom);
@@ -55,10 +54,8 @@ export default function UploadOption({onUpload}: Props) {
   });
 
   const handleUploadClick = (e: React.MouseEvent) => {
-    console.log('UploadOption - handleUploadClick called');
     e.preventDefault();
     e.stopPropagation();
-    console.log('UploadOption - setting uploadConfirmationModal to true');
     setUploadConfirmationModal(true);
   };
 
