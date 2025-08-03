@@ -17,27 +17,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev
 
-# Install Python dependencies
-COPY setup.py .
-COPY README.md .
+# Install Python dependencies optimiszed for video processing only
 RUN pip install --upgrade pip setuptools
-RUN pip install werkzeug==2.2.3 \
+RUN pip install \
+    # Web framework
+    werkzeug==2.2.3 \
     Flask==2.2.3 \
     Flask-Cors==3.0.10 \
     requests==2.28.2 \
+    # Video processing
     av>=13.0.0 \
-    dataclasses-json>=0.6.7 \
     eva-decord>=0.6.1 \
-    imagesize>=1.4.1 \
-    pycocotools>=2.0.8 \
     opencv-python>=4.7.0 \
+    # Scientific computing (no PyTorch needed)
     numpy>=1.24.4 \
-    iopath>=0.1.10 \
-    pillow>=9.4.0 \
     scipy>=1.14.1 \
     pandas>=2.0.3 \
-    scikit-image>=0.25.2 \ 
-    scipy>=1.15
+    scikit-image>=0.25.2 \
+    # Image/mask processing
+    pillow>=9.4.0 \
+    pycocotools>=2.0.8 \
+    # Data handling
+    dataclasses-json>=0.6.7 \
+    imagesize>=1.4.1 \
+    iopath>=0.1.10
 
 # Make app directory
 RUN mkdir -p ${APP_ROOT}/server

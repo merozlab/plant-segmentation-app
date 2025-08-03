@@ -5,9 +5,11 @@ services:
       - ./demo/data/uploads:/uploads
     command: >
       sh -c "
+        echo 'Starting uploads directory cleanup...' &&
         find /uploads -type f ! -name '.gitkeep' -delete &&
         find /uploads -type d ! -path '/uploads' -exec rm -rf {} + 2>/dev/null || true &&
-        echo 'Uploads directory cleaned (keeping .gitkeep)'
+        echo 'Uploads directory cleaned (keeping .gitkeep)' &&
+        echo 'Cleanup completed'
       "
 
   frontend:
@@ -55,9 +57,9 @@ services:
     volumes:
       - ./demo/data/:/data/:rw
     environment:
-      - SERVER_ENVIRONMENT=DEV
+      - SERVER_ENVIRONMENT=PROD
       - FLASK_APP=video_app
-      - FLASK_DEBUG=1
+      - FLASK_DEBUG=0
       - API_URL=http://localhost:7264
       - INFERENCE_API_URL=http://inference:5000
       # ffmpeg/video encode settings

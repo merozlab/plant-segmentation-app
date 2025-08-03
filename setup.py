@@ -20,20 +20,24 @@ LICENSE = "Apache 2.0"
 with open("README.md", "r", encoding="utf-8") as f:
     LONG_DESCRIPTION = f.read()
 
-# Required dependencies
+# Required dependencies (PyTorch will be installed separately via install_pytorch.py)
 REQUIRED_PACKAGES = [
-    "torch>=2.5.1",
-    "torchvision>=0.20.1",
+    # Core dependencies
     "numpy>=1.24.4",
     "tqdm>=4.66.1",
     "hydra-core>=1.3.2",
     "iopath>=0.1.10",
     "pillow>=9.4.0",
-    "streamlit==1.40.0",
     "scipy>=1.14.1",
     "stqdm>=0.0.5",
+    "streamlit==1.40.0",
     "streamlit-image-annotation>=0.4.0",
 ]
+
+print("📦 Installing base SAM-2 dependencies...")
+print("⚠️  Note: PyTorch is not included in base installation.")
+print("🚀 After installation, run 'python install_pytorch.py' to install PyTorch with optimal CUDA support.")
+print("   This ensures the best GPU compatibility for your system.\n")
 
 EXTRA_PACKAGES = {
     "notebooks": [
@@ -106,6 +110,10 @@ def get_extensions():
             ],
         }
         ext_modules = [CUDAExtension("sam2._C", srcs, extra_compile_args=compile_args)]
+    except ImportError:
+        # PyTorch not available yet - this is expected during base installation
+        print("⚠️  PyTorch not found - CUDA extensions will be compiled after PyTorch installation")
+        ext_modules = []
     except Exception as e:
         if BUILD_ALLOW_ERRORS:
             print(CUDA_ERROR_MSG.format(e))
@@ -150,6 +158,10 @@ try:
             else BuildExtension.with_options(no_python_abi_suffix=True)
         )
     }
+except ImportError:
+    # PyTorch not available - create empty cmdclass
+    cmdclass = {}
+    print("ℹ️  PyTorch not found - skipping CUDA extension build commands")
 except Exception as e:
     cmdclass = {}
     if BUILD_ALLOW_ERRORS:
