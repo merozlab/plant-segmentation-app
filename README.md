@@ -4,7 +4,10 @@
 
 
 ## Easy installation
-Prerequisistes
+
+If you are running this on Windows, we highly recommend working in [WSL](https://learn.microsoft.com/en-us/windows/wsl/install), and [connecting Docker to WSL](https://docs.docker.com/desktop/features/wsl/)
+
+**Prerequisistes**
 1. **Docker**: Install Docker and Docker Compose for containerized deployment. See [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 2. **GPU with CUDA support**: Required for optimal SAM 2 performance and inference
 3. **Python 3.8+**: Optional, for running the PyTorch installation script
@@ -19,30 +22,14 @@ docker run --rm --gpus all nvidia/cuda:11.0-base-ubuntu20.04 nvidia-smi
 ```
 
 **Install SAP**
+
 1. Run `python install_pytorch.py --update` or manually select the right CUDA/Pytorch image in inference.Dockerfile
-2. run `docker compose up --build`
+2. run `docker compose up --build`. The CUDA base image is quite heavy, and might take some time to download on initial build.
 3. open your browser at http://localhost:7262
 
 ## Docker Setup with Optimal PyTorch Image
 
 For users running SAP in Docker containers, you can optimize performance by choosing the best PyTorch base image for your GPU. The `install_pytorch.py` script helps you select the optimal Docker image based on your system's GPU and CUDA version.
-
-### Quick Start
-
-1. **Detect your optimal PyTorch image:**
-   ```bash
-   python install_pytorch.py
-   ```
-
-2. **Automatically update the Dockerfile:**
-   ```bash
-   python install_pytorch.py --update
-   ```
-
-3. **Build and run with optimized image:**
-   ```bash
-   docker compose up --build
-   ```
 
 ### Advanced Usage
 

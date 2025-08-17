@@ -84,22 +84,113 @@ export function encode(
       // which otherwise will produce 20x larger files when in quality
       // latencyMode. Chrome does a really good job with file size even when
       // latencyMode is set to quality.
-      const configuration: VideoEncoderConfig = {
-        codec: 'avc1.4d0034',
-        width: roundToNearestEven(width),
-        height: roundToNearestEven(height),
-        bitrate: 14_000_000,
-        alpha: 'discard',
-        bitrateMode: 'variable',
-        latencyMode: 'realtime',
-      };
-      const supportedConfig =
-        await VideoEncoder.isConfigSupported(configuration);
-      if (supportedConfig.supported === true) {
-        encoder.configure(configuration);
-      } else {
+
+      const targetWidth = roundToNearestEven(width);
+      const targetHeight = roundToNearestEven(height);
+
+      // Define fallback configurations to try if the primary config fails
+      const configurationOptions: VideoEncoderConfig[] = [
+        // Primary configuration
+        {
+          codec: 'avc1.4d0034',
+          width: targetWidth,
+          height: targetHeight,
+          bitrate: 14_000_000,
+          alpha: 'discard',
+          bitrateMode: 'variable',
+          latencyMode: 'realtime',
+        },
+        // Fallback 1: Lower bitrate
+        {
+          codec: 'avc1.4d0034',
+          width: targetWidth,
+          height: targetHeight,
+          bitrate: 8_000_000,
+          alpha: 'discard',
+          bitrateMode: 'variable',
+          latencyMode: 'realtime',
+        },
+        // Fallback 2: Different codec profile
+        {
+          codec: 'avc1.42e01e',
+          width: targetWidth,
+          height: targetHeight,
+          bitrate: 8_000_000,
+          alpha: 'discard',
+          bitrateMode: 'variable',
+          latencyMode: 'realtime',
+        },
+        // Fallback 3: Reduce resolution if too high
+        {
+          codec: 'avc1.42e01e',
+          width: Math.min(targetWidth, 1920),
+          height: Math.min(targetHeight, 1080),
+          bitrate: 6_000_000,
+          alpha: 'discard',
+          bitrateMode: 'variable',
+          latencyMode: 'realtime',
+        },
+        // Fallback 4: Basic configuration with constant bitrate
+        {
+          codec: 'avc1.42e01e',
+          width: Math.min(targetWidth, 1280),
+          height: Math.min(targetHeight, 720),
+          bitrate: 4_000_000,
+          alpha: 'discard',
+          bitrateMode: 'constant',
+          latencyMode: 'realtime',
+        },
+        // Fallback 5: Very conservative settings
+        {
+          codec: 'avc1.42e01e',
+          width: Math.min(targetWidth, 854),
+          height: Math.min(targetHeight, 480),
+          bitrate: 2_000_000,
+          alpha: 'discard',
+          bitrateMode: 'constant',
+          latencyMode: 'realtime',
+        },
+        // Fallback 6: Minimal settings for maximum compatibility
+        {
+          codec: 'avc1.42001e', // H.264 Baseline Profile
+          width: Math.min(targetWidth, 640),
+          height: Math.min(targetHeight, 360),
+          bitrate: 1_000_000,
+          alpha: 'discard',
+          bitrateMode: 'constant',
+          latencyMode: 'realtime',
+        },
+      ];
+
+      let configurationUsed: VideoEncoderConfig | null = null;
+      let lastError: string | null = null;
+
+      // Try each configuration until one is supported
+      for (const configuration of configurationOptions) {
+        try {
+          const supportedConfig = await VideoEncoder.isConfigSupported(configuration);
+          if (supportedConfig.supported === true) {
+            encoder.configure(configuration);
+            configurationUsed = configuration;
+            console.log('Video encoder configured with:', configuration);
+            break;
+          } else {
+            lastError = `Config not supported: ${JSON.stringify(supportedConfig)}`;
+          }
+        } catch (error) {
+          lastError = `Error checking config support: ${error}`;
+        }
+      }
+
+      if (!configurationUsed) {
+        // Provide helpful error message about WebCodecs support
+        const isWebCodecsSupported = typeof VideoEncoder !== 'undefined';
+        const supportInfo = isWebCodecsSupported 
+          ? 'WebCodecs is supported but no encoder configuration worked' 
+          : 'WebCodecs VideoEncoder is not available';
+          
         throw new Error(
-          `Unsupported video encoder config ${JSON.stringify(supportedConfig)}`,
+          `Video encoding failed: ${supportInfo}. This may be due to browser limitations, hardware restrictions, or unsupported video resolution. Try using a different browser (Chrome/Edge recommended) or download frames instead. Last error: ${lastError}`
         );
       }
 

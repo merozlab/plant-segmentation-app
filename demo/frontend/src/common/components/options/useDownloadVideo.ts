@@ -55,6 +55,40 @@ export default function useDownloadVideo(): State {
   const video = useVideo();
 
   async function download(shouldSave = true, format: DownloadFormat = 'video'): Promise<MP4ArrayBuffer> {
+    // For frame downloads, we don't need video encoding at all
+    if (format === 'frames') {
+      return new Promise(async (resolve) => {
+        if (downloadingState === 'default' || downloadingState === 'completed') {
+          setDownloadingState('started');
+          
+          try {
+            await saveVideoAsFrames();
+            setDownloadingState('completed');
+            // Return empty buffer since we don't actually encode video for frames
+            resolve(new ArrayBuffer(0) as MP4ArrayBuffer);
+          } catch (error) {
+            setDownloadingState('default');
+            enqueueMessage(
+              '❌ Error downloading frames. Please try again.',
+              { type: 'warning', expire: true, duration: 5000 }
+            );
+            console.error('Frame download error:', error);
+            resolve(new ArrayBuffer(0) as MP4ArrayBuffer);
+          }
+        }
+      });
+    }
+
+    // For video downloads, check WebCodecs support first
+    if (typeof VideoEncoder === 'undefined') {
+      enqueueMessage(
+        '❌ Video encoding is not supported in your browser. Please try downloading frames instead.',
+        { type: 'warning', expire: true, duration: 7000 }
+      );
+      return Promise.resolve(new ArrayBuffer(0) as MP4ArrayBuffer);
+    }
+
+    // Original video encoding logic
     return new Promise(resolve => {
       function onEncodingStateUpdate(event: EncodingStateUpdateEvent) {
         setDownloadingState('encoding');
@@ -65,22 +99,11 @@ export default function useDownloadVideo(): State {
         const file = event.file;
 
         if (shouldSave) {
-          if (format === 'video') {
-            saveVideo(file, getFileName());
-            video?.removeEventListener('encodingCompleted', onEncodingComplete);
-            video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
-            setDownloadingState('completed');
-            resolve(file);
-          } else if (format === 'frames') {
-            // Keep the loading state active during frame extraction
-            // Will be set to completed inside the saveVideoAsFrames function
-            saveVideoAsFrames().finally(() => {
-              video?.removeEventListener('encodingCompleted', onEncodingComplete);
-              video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
-              setDownloadingState('completed');
-              resolve(file);
-            });
-          }
+          saveVideo(file, getFileName());
+          video?.removeEventListener('encodingCompleted', onEncodingComplete);
+          video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
+          setDownloadingState('completed');
+          resolve(file);
         } else {
           video?.removeEventListener('encodingCompleted', onEncodingComplete);
           video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
@@ -89,13 +112,32 @@ export default function useDownloadVideo(): State {
         }
       }
 
+      function onEncodingError() {
+        video?.removeEventListener('encodingCompleted', onEncodingComplete);
+        video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
+        video?.removeEventListener('error', onEncodingError);
+        setDownloadingState('default');
+        enqueueMessage(
+          '❌ Video encoding failed. This may be due to browser limitations or video resolution. Try downloading frames instead.',
+          { type: 'warning', expire: true, duration: 7000 }
+        );
+        resolve(new ArrayBuffer(0) as MP4ArrayBuffer);
+      }
+
       video?.addEventListener('encodingStateUpdate', onEncodingStateUpdate);
       video?.addEventListener('encodingCompleted', onEncodingComplete);
+      video?.addEventListener('error', onEncodingError);
 
       if (downloadingState === 'default' || downloadingState === 'completed') {
         setDownloadingState('started');
         video?.pause();
-        video?.encode();
+        
+        try {
+          video?.encode();
+        } catch (error) {
+          console.error('Video encoding error:', error);
+          onEncodingError();
+        }
       }
     });
   }

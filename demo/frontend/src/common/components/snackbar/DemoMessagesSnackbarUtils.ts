@@ -64,7 +64,7 @@ export const defaultMessageMap: MessagesEventMap = {
     options: { type: 'loading', showClose: false, repeat: true, duration: 2000 },
   },
   firstClick: {
-    text: 'Tip: Click on any object in the video to get started.',
+    text: '!!!!! Tip: Click on any object in the video to get started.',
     shown: false,
     options: { expire: false, repeat: false },
   },
@@ -99,50 +99,50 @@ export const defaultMessageMap: MessagesEventMap = {
     options: { expire: false, repeat: false },
   },
   maskGenerationStart: {
-    text: '⏳ Generating masks on the server. Please keep this window open...',
+    text: 'Generating masks on the server. Please keep this window open...',
     shown: false,
     options: { expire: false, showClose: false, type: 'info', duration: 0, repeat: true },
   },
   maskGenerationSuccess: {
-    text: '✅ Masks generated successfully!',
+    text: '✓ Masks generated successfully!',
     shown: false,
     options: { type: 'info', expire: true, duration: 5000, repeat: true },
   },
   maskGenerationFailure: {
-    text: '❌ Failed to generate masks. Please try again.',
+    text: '✗ Failed to generate masks. Please try again.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: true },
   },
   // Show when centerlines CSV zip has downloaded successfully
   centerlineDownloadSuccess: {
-    text: '✅ Centerlines CSV downloaded successfully.',
+    text: '✓ Centerlines CSV downloaded successfully.',
     shown: false,
     options: { type: 'info', expire: true, duration: 5000, repeat: false },
   },
   // Show when centerlines CSV zip download fails
   centerlineDownloadError: {
-    text: '❌ Failed to download centerlines CSV.',
+    text: '✗ Failed to download centerlines CSV.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: false },
   },
   // Show when meter conversion fails
   centerlineConversionError: {
-    text: '❌ Failed to convert centerlines to meters. Check length scale setting.',
+    text: '✗ Failed to convert centerlines to meters. Check length scale setting.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: false },
   },
   noActiveSession: {
-    text: '❌ No active session found. Please try again.',
+    text: '✗ No active session found. Please try again.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 5000, repeat: true },
   },
   centerlineSuccess: {
-    text: '✅ Centerlines generated successfully!',
+    text: '✓ Centerlines generated successfully!',
     shown: false,
     options: { type: 'info', expire: true, duration: 5000, repeat: true },
   },
   centerlineError: {
-    text: '❌ Failed to generate centerlines. Please try again.',
+    text: '✗ Failed to generate centerlines. Please try again.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: true },
   },
@@ -152,7 +152,7 @@ export const defaultMessageMap: MessagesEventMap = {
     options: { type: 'info', expire: true, duration: 5000, repeat: true },
   },
   basePointSet: {
-    text: '✅ Base point set successfully!',
+    text: '✓ Base point set successfully!',
     shown: false,
     options: { type: 'info', expire: true, duration: 3000, repeat: true },
   },
@@ -162,12 +162,12 @@ export const defaultMessageMap: MessagesEventMap = {
     options: { type: 'info', expire: true, duration: 4000, repeat: true },
   },
   allBasePointsSet: {
-    text: '✅ All base points are set! You can now extract centerlines.',
+    text: '✓ All base points are set! You can now extract centerlines.',
     shown: false,
     options: { type: 'info', expire: true, duration: 5000, repeat: true },
   },
   basepointsError: {
-    text: '❌ Failed to set base point. Please try again.',
+    text: '✗ Failed to set base point. Please try again.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: true },
   },
@@ -182,12 +182,12 @@ export const defaultMessageMap: MessagesEventMap = {
     options: { type: 'info', expire: true, duration: 3000, repeat: false },
   },
   proceedingWithoutLengthScale: {
-    text: 'ℹ️ Proceeding without length scale - centerlines will be calculated in pixels.',
+    text: 'Proceeding without length scale - centerlines will be calculated in pixels.',
     shown: false,
-    options: { type: 'warning', expire: true, duration: 5000, repeat: false },
+    options: { type: 'info', expire: true, duration: 5000, repeat: false },
   },
   videoCropError: {
-    text: '❌ Video crop operation failed. Please check the error details.',
+    text: '✗ Video crop operation failed. Please check the error details.',
     shown: false,
     options: { type: 'warning', expire: true, duration: 7000, repeat: true },
   }

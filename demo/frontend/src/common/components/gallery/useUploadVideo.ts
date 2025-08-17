@@ -36,6 +36,77 @@ const ACCEPT_VIDEOS = {
   'application/zip': ['.zip'],
 };
 
+// Utility function to convert technical error messages to user-friendly ones
+function getVideoErrorMessage(errorMessage: string): string {
+  const message = errorMessage.toLowerCase();
+  
+  // Check for specific backend error messages
+  if (message.includes('not valid video file') || message.includes('invalid data')) {
+    return 'This file is not a valid video format. Please try an MP4 or MOV file.';
+  }
+  
+  if (message.includes('does not contain a video stream')) {
+    return 'This file appears to be corrupted or contains no video content. Please try a different video file.';
+  }
+  
+  if (message.includes('does not contain width or height metadata')) {
+    return 'This video file is missing important metadata. Please try re-encoding your video or use a different file.';
+  }
+  
+  if (message.includes('does not contain time duration metadata') || message.includes('does time duration metadata')) {
+    return 'This video file is missing duration information. Please try re-encoding your video or use a different file.';
+  }
+  
+  if (message.includes('transcode produced empty video') || message.includes('empty video')) {
+    return 'The video could not be processed properly. It may be too short or have an invalid format. Please try a different video.';
+  }
+  
+  if (message.includes('file too large') || message.includes('413')) {
+    return `File is too large. Please use a video under ${MAX_FILE_SIZE_IN_MB}MB.`;
+  }
+  
+  if (message.includes('unsupported format') || message.includes('codec')) {
+    return 'This video format or codec is not supported. Please try converting to MP4 format.';
+  }
+  
+  if (message.includes('duration') && message.includes('too long')) {
+    return 'Video is too long. Please use a shorter video (maximum 30 seconds).';
+  }
+  
+  if (message.includes('network') || message.includes('fetch')) {
+    return 'Network error occurred while uploading. Please check your connection and try again.';
+  }
+  
+  if (message.includes('timeout')) {
+    return 'Upload timed out. Please try again with a smaller file or check your internet connection.';
+  }
+  
+  // Check for common video encoding issues
+  if (message.includes('resolution') || message.includes('dimensions')) {
+    return 'Video resolution is not supported. Please try a video with standard dimensions (e.g., 1920x1080).';
+  }
+  
+  if (message.includes('frame rate') || message.includes('fps')) {
+    return 'Video frame rate is not supported. Please try a video with standard frame rate (24-60 fps).';
+  }
+  
+  if (message.includes('permission') || message.includes('unauthorized')) {
+    return 'You do not have permission to upload files. Please contact support.';
+  }
+  
+  // Generic error messages for common issues
+  if (message.includes('upload') && message.includes('fail')) {
+    return 'Upload failed. Please check your internet connection and try again.';
+  }
+  
+  if (message.includes('server') && message.includes('error')) {
+    return 'Server error occurred. Please try again in a few moments.';
+  }
+  
+  // Default fallback message
+  return 'Video upload failed. Please ensure your file is a valid MP4 or MOV video and try again.';
+}
+
 type Props = {
   onUpload: (video: VideoData) => void;
   onUploadStart?: () => void;
@@ -177,17 +248,20 @@ export default function useUploadVideo({
         },
         onError: error => {
           Logger.error(error);
-          const errorMsg = 'Upload failed.';
-          setErrorMessage(errorMsg);
-          setGlobalErrorMessage?.(errorMsg);
+          
+          // Parse GraphQL error message for user-friendly display
+          const userFriendlyMessage = getVideoErrorMessage(error.message || error.toString());
+          setErrorMessage(userFriendlyMessage);
+          setGlobalErrorMessage?.(userFriendlyMessage);
           onUploadError?.(error);
         },
       });
     } catch (error) {
       Logger.error(error);
       const errorMsg = error instanceof Error ? error.message : 'An unknown error occurred';
-      setErrorMessage(errorMsg);
-      setGlobalErrorMessage?.(errorMsg);
+      const userFriendlyMessage = getVideoErrorMessage(errorMsg);
+      setErrorMessage(userFriendlyMessage);
+      setGlobalErrorMessage?.(userFriendlyMessage);
       onUploadError?.(error instanceof Error ? error : new Error(errorMsg));
     } finally {
       setIsProcessingFolder(false);
@@ -221,11 +295,11 @@ export default function useUploadVideo({
       }
 
       if (acceptedFiles.length === 0) {
-        setErrorMessage('File not accepted. Please try again.');
+        setErrorMessage('File not accepted. Please upload an MP4, MOV, or ZIP file.');
         return;
       }
       if (acceptedFiles.length > 1) {
-        setErrorMessage('Too many files. Please try again with 1 file.');
+        setErrorMessage('Too many files. Please upload only one file at a time.');
         return;
       }
 
@@ -251,16 +325,28 @@ export default function useUploadVideo({
             method: 'POST',
             body: formData,
           });
+          
+          if (!resp.ok) {
+            const errorText = await resp.text();
+            const userFriendlyMessage = getVideoErrorMessage(`Server error ${resp.status}: ${errorText}`);
+            setErrorMessage(userFriendlyMessage);
+            onUploadError?.(new Error(userFriendlyMessage));
+            return;
+          }
+          
           const data = await resp.json();
           if (data.status !== 'processing' || !data.id) {
-            setErrorMessage('Failed to start zip processing.');
-            onUploadError?.(new Error('Failed to start zip processing.'));
+            const userFriendlyMessage = getVideoErrorMessage('Failed to start zip processing');
+            setErrorMessage(userFriendlyMessage);
+            onUploadError?.(new Error(userFriendlyMessage));
             return;
           }
           videoId = data.id;
         } catch (e) {
-          setErrorMessage('Failed to upload zip.');
-          onUploadError?.(e instanceof Error ? e : new Error('Failed to upload zip.'));
+          const errorMsg = e instanceof Error ? e.message : 'Failed to upload zip';
+          const userFriendlyMessage = getVideoErrorMessage(errorMsg);
+          setErrorMessage(userFriendlyMessage);
+          onUploadError?.(e instanceof Error ? e : new Error(userFriendlyMessage));
           return;
         }
 
@@ -286,8 +372,10 @@ export default function useUploadVideo({
               return;
             }
           } catch (e) {
-            setErrorMessage('Error checking video status.');
-            onUploadError?.(e instanceof Error ? e : new Error('Error checking video status.'));
+            const errorMsg = e instanceof Error ? e.message : 'Error checking video status';
+            const userFriendlyMessage = getVideoErrorMessage(errorMsg);
+            setErrorMessage(userFriendlyMessage);
+            onUploadError?.(e instanceof Error ? e : new Error(userFriendlyMessage));
             return;
           }
           pollAttempts++;
@@ -322,10 +410,11 @@ export default function useUploadVideo({
             throw new Error("Downloaded video file is empty");
           }
         } catch (e) {
-          const errorMsg = 'Failed to download converted video.';
-          setErrorMessage(errorMsg);
-          setGlobalErrorMessage?.(errorMsg);
-          onUploadError?.(e instanceof Error ? e : new Error(errorMsg));
+          const errorMsg = e instanceof Error ? e.message : 'Failed to download converted video';
+          const userFriendlyMessage = getVideoErrorMessage(errorMsg);
+          setErrorMessage(userFriendlyMessage);
+          setGlobalErrorMessage?.(userFriendlyMessage);
+          onUploadError?.(e instanceof Error ? e : new Error(userFriendlyMessage));
           return;
         }
 
@@ -370,14 +459,19 @@ export default function useUploadVideo({
         onError: error => {
           console.log('useUploadVideo - GraphQL upload error:', error);
           Logger.error(error);
+          
+          // Parse GraphQL error message for user-friendly display
+          const userFriendlyMessage = getVideoErrorMessage(error.message || error.toString());
+          setErrorMessage(userFriendlyMessage);
+          setGlobalErrorMessage?.(userFriendlyMessage);
           onUploadError?.(error);
-          setErrorMessage('Upload failed.');
         },
       });
     },
     onError: (error: any) => {
       Logger.error(error);
-      setErrorMessage('File not supported.');
+      const userFriendlyMessage = getVideoErrorMessage(error.message || error.toString());
+      setErrorMessage(userFriendlyMessage);
     },
     maxSize: MAX_ZIP_UPLOAD_SIZE, // Use the larger size limit to allow ZIP files
   });
