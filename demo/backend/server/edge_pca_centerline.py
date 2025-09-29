@@ -237,7 +237,6 @@ def edge_pca_centerline_from_contour(
     x_uniform, y_uniform = distribute_points(x_sorted, y_sorted, len(contour))
     uniform_contour = np.column_stack((x_uniform, y_uniform))
     sorted_points = PCA_sort(uniform_contour)
-    print("GOT EDGE_PERCENTAGE:", edge_percentage)
     # Get first and last edge_percentage of points
     n = max(int(len(sorted_points) * edge_percentage), 1)
     start_edge_points = sorted_points[:n]

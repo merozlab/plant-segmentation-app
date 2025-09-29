@@ -94,6 +94,8 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         requestBody.n_points = centerlinePoints;
       }
 
+      console.log(`Sending centerline request for ${algorithm}:`, requestBody);
+
       const resp = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -275,18 +277,15 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
               <input
                 type="radio"
                 name="centerlineAlgorithm"
-                value="edge"
-                checked={centerlineAlgorithm === 'edge'}
-                onChange={() => handleAlgorithmChange('edge')}
+                value="skeletonize_plus"
+                checked={centerlineAlgorithm === 'skeletonize_plus'}
+                onChange={() => handleAlgorithmChange('skeletonize_plus')}
                 className="radio radio-primary"
                 disabled={isLoading}
               />
               <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">Edge PCA</span>
-                  <span className="px-2 py-1 text-xs bg-orange-600 text-white rounded-full">DEPRECATED</span>
-                </div>
-                <span className="text-gray-400 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
+                <span className="text-white font-medium">Skeletonize+</span>
+                <span className="text-gray-400 text-sm">Enhanced skeleton extraction with improved accuracy and robustness</span>
               </div>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">
@@ -304,19 +303,22 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                 <span className="text-gray-400 text-sm">Morphological skeleton extraction using scikit-image</span>
               </div>
             </label>
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className="flex items-center gap-3 cursor-pointer opacity-50">
               <input
                 type="radio"
                 name="centerlineAlgorithm"
-                value="skeletonize_plus"
-                checked={centerlineAlgorithm === 'skeletonize_plus'}
-                onChange={() => handleAlgorithmChange('skeletonize_plus')}
+                value="edge"
+                checked={centerlineAlgorithm === 'edge'}
+                onChange={() => handleAlgorithmChange('edge')}
                 className="radio radio-primary"
                 disabled={isLoading}
               />
               <div className="flex flex-col">
-                <span className="text-white font-medium">Skeletonize +</span>
-                <span className="text-gray-400 text-sm">Enhanced skeleton extraction with improved accuracy and robustness</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-300 font-medium">Edge PCA</span>
+                  <span className="px-2 py-1 text-xs bg-gray-600 text-white rounded-full">DEPRECATED</span>
+                </div>
+                <span className="text-gray-500 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
               </div>
             </label>
           </div>
@@ -369,6 +371,20 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                       }
                     }
                   }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      const value = (e.target as HTMLInputElement).value;
+                      // Immediately update the atom when Enter is pressed
+                      if (value === '') {
+                        setCenterlinePoints(null);
+                      } else {
+                        const numValue = parseInt(value);
+                        if (!isNaN(numValue)) {
+                          setCenterlinePoints(Math.max(50, Math.min(500, numValue)));
+                        }
+                      }
+                    }
+                  }}
                   onBlur={(e) => {
                     // Apply minimum constraint when user finishes editing
                     const value = e.target.value;
@@ -376,6 +392,16 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                       const constrainedValue = Math.max(50, Math.min(500, parseInt(value)));
                       if (constrainedValue !== parseInt(value)) {
                         handlePointsChange(constrainedValue);
+                      }
+                    }
+                    
+                    // Immediately update the atom when user finishes editing
+                    if (value === '') {
+                      setCenterlinePoints(null);
+                    } else {
+                      const numValue = parseInt(value);
+                      if (!isNaN(numValue)) {
+                        setCenterlinePoints(Math.max(50, Math.min(500, numValue)));
                       }
                     }
                   }}
@@ -388,14 +414,17 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                 <span className="text-gray-400 text-xs">Leave empty for automatic selection (minimum 50 if specified)</span>
               </div>
 
-              {/* Edge Percentage - Only show when Edge PCA algorithm is selected */}
-              {centerlineAlgorithm === 'edge' && (
+              {/* Edge Percentage - Show for Edge PCA and Skeletonize + algorithms */}
+              {(centerlineAlgorithm === 'edge' || centerlineAlgorithm === 'skeletonize_plus') && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <label className="text-white text-sm font-medium">Edge percentage</label>
                     <div
                       className="tooltip tooltip-top"
-                      data-tip="Percentage of contour points to use for edge detection. Lower values focus on the tips, higher values include more of the contour."
+                      data-tip={centerlineAlgorithm === 'edge' 
+                        ? "Percentage of contour points to use for edge detection. Lower values focus on the tips, higher values include more of the contour."
+                        : "Percentage parameter for skeleton refinement. Lower values focus on main structure, higher values include more detail."
+                      }
                     >
                       <Information className="w-4 h-4 text-gray-400 hover:text-white cursor-help" />
                     </div>
@@ -408,6 +437,20 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                         const value = e.target.value;
                         handleEdgePercentageChange(value);
                       }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          const value = (e.target as HTMLInputElement).value;
+                          // Immediately update the atom when Enter is pressed
+                          if (value === '') {
+                            setCenterlineEdgePercentage(null);
+                          } else {
+                            const numValue = parseInt(value);
+                            if (!isNaN(numValue)) {
+                              setCenterlineEdgePercentage(Math.max(1, Math.min(50, numValue)) / 100);
+                            }
+                          }
+                        }
+                      }}
                       onBlur={(e) => {
                         // Apply constraints when user finishes editing
                         const value = e.target.value;
@@ -417,6 +460,17 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                             handleEdgePercentageChange(constrainedValue.toString());
                           }
                         }
+                        
+                        // Immediately update the atom when user finishes editing
+                        if (value === '') {
+                          setCenterlineEdgePercentage(null);
+                        } else {
+                          const numValue = parseInt(value);
+                          if (!isNaN(numValue)) {
+                            setCenterlineEdgePercentage(Math.max(1, Math.min(50, numValue)) / 100);
+                          }
+                        }
+                        
                         // Reset typing flag after blur
                         setTimeout(() => {
                           isUserTypingRef.current = false;

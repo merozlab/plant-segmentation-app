@@ -24,7 +24,7 @@ import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useState } from 'react'; // Import state to handle button loading state
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom'; // Import our mask readiness state
-import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom, centerlineEdgePercentageAtom } from '@/demo/atoms';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlinePointsAtom, centerlineEdgePercentageAtom } from '@/demo/atoms';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 
 type Props = {
@@ -38,7 +38,6 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
   const [trackletObjects] = useAtom(trackletObjectsAtom);
   const setCenterlinesMap = useSetAtom(centerlinesAtom);
   const originalFilePath = useAtomValue(originalFilePathAtom);
-  const centerlineAlgorithm = useAtomValue(centerlineAlgorithmAtom);
   const centerlinePoints = useAtomValue(centerlinePointsAtom);
   const centerlineEdgePercentage = useAtomValue(centerlineEdgePercentageAtom);
 
@@ -49,30 +48,34 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
   // Make the handler async
   async function handleSwitchToCenterlineTab() {
     setIsLoading(true);
-    // helper to fetch PCA-computed centerlines and populate atom
-    async function fetchCenterlinesPCA() {
+    // helper to fetch centerlines using skeletonize_plus algorithm and populate atom
+    async function fetchCenterlines() {
       if (!session?.id) {
-        console.error('Missing session for centerline PCA');
+        console.error('Missing session for centerline extraction');
         return;
       }
       try {
-        // Build request body conditionally
+        // Use skeletonize_plus endpoint when transitioning to centerline toolbar
+        const endpoint = `${VIDEO_API_ENDPOINT}/centerlines_skeletonize_plus`;
+
         const requestBody: any = {
           session_id: session.id,
           safe_folder_name: originalFilePath,
-          pca_algorithm: centerlineAlgorithm,
         };
 
-        // Only add parameters if they're not null
+        // Add edge_percentage if it's available for skeletonize_plus
+        if (centerlineEdgePercentage !== null) {
+          requestBody.edge_percentage = centerlineEdgePercentage;
+        }
+
+        // Only add n_points if it's not null
         if (centerlinePoints !== null) {
           requestBody.n_points = centerlinePoints;
         }
 
-        if (centerlineAlgorithm === 'edge' && centerlineEdgePercentage !== null) {
-          requestBody.edge_percentage = centerlineEdgePercentage;
-        }
+        console.log('Sending skeletonize_plus request from MoreOptions transition:', requestBody);
 
-        const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
+        const resp = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
@@ -92,17 +95,17 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
         });
         setCenterlinesMap(mapping);
       } catch (e) {
-        console.error('Error fetching centerlines PCA:', e);
+        console.error('Error fetching centerlines:', e);
       }
     }
     if (areMasksReady) {
-      await fetchCenterlinesPCA();
+      await fetchCenterlines();
       setIsLoading(false);
       onTabChange(CENTERLINE_TOOLBAR_INDEX);
     } else {
       // retry after masks generation delay
       setTimeout(async () => {
-        await fetchCenterlinesPCA();
+        await fetchCenterlines();
         setIsLoading(false);
         onTabChange(CENTERLINE_TOOLBAR_INDEX);
       }, 5000);

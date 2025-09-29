@@ -210,7 +210,7 @@ export const uploadedVideoDataAtom = atom<VideoData | null>(null);
 // Centerline algorithm
 // #####################
 
-export const centerlineAlgorithmAtom = atom<'edge' | 'full' | 'skeletonize'>('edge');
+export const centerlineAlgorithmAtom = atom<'edge' | 'full' | 'skeletonize' | 'skeletonize_plus'>('skeletonize_plus');
 
 export const centerlinePointsAtom = atom<number | null>(null);
 

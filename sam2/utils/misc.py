@@ -11,7 +11,6 @@ from threading import Thread
 import numpy as np
 import torch
 from PIL import Image
-from stqdm import stqdm
 
 
 def get_sdpa_settings():
@@ -136,7 +135,7 @@ class AsyncVideoFrameLoader:
         # load the rest of frames asynchronously without blocking the session start
         def _load_frames():
             try:
-                for n in stqdm(range(len(self.images)), desc="frame loading (JPEG)"):
+                for n in range(len(self.images)):
                     self.__getitem__(n)
             except Exception as e:
                 self.exception = e
@@ -265,7 +264,7 @@ def load_video_frames_from_jpg_images(
         return lazy_images, lazy_images.video_height, lazy_images.video_width
 
     images = torch.zeros(num_frames, 3, image_size, image_size, dtype=torch.float32)
-    for n, img_path in enumerate(stqdm(img_paths, desc="frame loading (JPEG)")):
+    for n, img_path in enumerate(img_paths):
         images[n], video_height, video_width = _load_img_as_tensor(img_path, image_size)
     if not offload_video_to_cpu:
         images = images.to(compute_device)
