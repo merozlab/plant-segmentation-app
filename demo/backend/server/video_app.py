@@ -25,8 +25,9 @@ from mask_to_curvature import (
     get_contours,
     get_centerline_pca,
     get_centerline_edge_pca,
-    get_centerline_skeletonize,
 )
+from skeletonize_classic import get_centerline_skeletonize
+from skeletonize_plus import skeletonize_plus
 from edge_pca_centerline import multi_contour_centerlines
 from pycocotools import mask as mask_util
 
@@ -357,6 +358,84 @@ def centerlines_pca() -> Response:
                         # Append empty centerline for this frame
                         frame_centerlines.append([[], []])
                 response[object_dir.name] = frame_centerlines
+
+    # Asynchronously save CSVs for each object
+    def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):
+        try:
+            centerlines_df = centerlines_to_df(
+                centerlines_dict, frame_names=original_file_names
+            )
+            csv_dir = base_path / "centerlines"
+            csv_dir.mkdir(parents=True, exist_ok=True)
+            for obj, df in centerlines_df.items():
+                df = df.rename({"x": "x (pixels)", "y": "y (pixels)"}, axis=1)
+                df.to_csv(csv_dir / f"{obj}.csv", index=False)
+            # After CSVs are written, zip the centerlines folder
+            try:
+                zip_name = f"{base_path.name}_centerlines.zip"
+                zip_path = base_path / zip_name
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                    for file in csv_dir.glob("*.csv"):
+                        zipf.write(file, str(file.relative_to(csv_dir)))
+            except Exception as zip_err:
+                logger.error(f"Error zipping centerlines CSVs: {zip_err}")
+        except Exception as e:
+            logger.error(f"Error saving centerlines CSVs: {e}")
+
+    threading.Thread(
+        target=_save_centerlines_csvs,
+        args=(response, base, original_file_names),
+        daemon=True,
+    ).start()
+
+    # Return response immediately, CSV saving continues in background
+    return make_response(response, 200)
+
+
+@app.route("/centerlines_skeletonize_plus", methods=["POST"])
+def centerlines_skeletonize_plus() -> Response:
+    """Placeholder endpoint for Skeletonize + algorithm"""
+    data = request.json
+    session_id = data["session_id"]
+    sfn = data.get("safe_folder_name", None)
+    n_points = data.get("n_points", None)
+    edge_percentage = data.get("edge_percentage", None)
+    print("Received data for centerlines_skeletonize_plus:", data)
+    original_file_names = get_original_filenames(sfn) if sfn else None
+
+    base = UPLOADS_PATH / session_id
+    masks_dir = base / "masks"
+    response = {}
+
+    # Load the JSON file with mask data
+    if not base.exists():
+        return make_response("Session not found", 404)
+    elif not masks_dir.exists():
+        return make_response("Masks not found", 404)
+
+    # Compute centerlines for each object using skeletonize_plus
+    for object_dir in masks_dir.iterdir():
+        if object_dir.is_dir():
+            frame_centerlines = []
+            for frame in sorted(object_dir.glob("*.bmp")):
+                try:
+                    # Get centerline for this frame using skeletonize_plus
+                    centerline_points = skeletonize_plus(str(frame), edge_percentage=edge_percentage, n_points=n_points)
+                    if len(centerline_points) > 0:
+                        # Convert to [x_coordinates, y_coordinates] format
+                        x_coords = centerline_points[:, 0].tolist()
+                        y_coords = centerline_points[:, 1].tolist()
+                        frame_centerlines.append([x_coords, y_coords])
+                    else:
+                        # Empty centerline, append empty lists
+                        frame_centerlines.append([[], []])
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to extract skeletonize+ centerline for frame {frame}: {e}"
+                    )
+                    # Append empty centerline for this frame
+                    frame_centerlines.append([[], []])
+            response[object_dir.name] = frame_centerlines
 
     # Asynchronously save CSVs for each object
     def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):

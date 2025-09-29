@@ -59,22 +59,33 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   };
 
   // Function to fetch centerlines with the selected algorithm
-  const fetchCenterlinesPCA = useCallback(async (algorithm: 'edge' | 'full' | 'skeletonize') => {
+  const fetchCenterlinesPCA = useCallback(async (algorithm: 'edge' | 'full' | 'skeletonize' | 'skeletonize_plus') => {
     if (!session?.id) {
       console.error('Missing session for centerline PCA');
       return;
     }
     try {
       setIsLoading(true);
+
+      // Use different endpoint for skeletonize_plus
+      const endpoint = algorithm === 'skeletonize_plus'
+        ? `${VIDEO_API_ENDPOINT}/centerlines_skeletonize_plus`
+        : `${VIDEO_API_ENDPOINT}/centerlines_pca`;
+
       const requestBody: any = {
         session_id: session.id,
         safe_folder_name: originalFilePath,
-        pca_algorithm: algorithm,
-        n_points: centerlinePoints
       };
 
-      // Add edge_percentage if algorithm is 'edge'
+      // For the original PCA endpoint, include pca_algorithm
+      if (algorithm !== 'skeletonize_plus') {
+        requestBody.pca_algorithm = algorithm;
+      }
+
+      // Add edge_percentage if algorithm is 'edge' or if it's available for skeletonize_plus
       if (algorithm === 'edge' && centerlineEdgePercentage !== null) {
+        requestBody.edge_percentage = centerlineEdgePercentage;
+      } else if (algorithm === 'skeletonize_plus' && centerlineEdgePercentage !== null) {
         requestBody.edge_percentage = centerlineEdgePercentage;
       }
 
@@ -83,7 +94,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         requestBody.n_points = centerlinePoints;
       }
 
-      const resp = await fetch(`${VIDEO_API_ENDPOINT}/centerlines_pca`, {
+      const resp = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -111,7 +122,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   }, [session?.id, originalFilePath, trackletObjects, setCenterlinesMap, enqueueMessage, centerlinePoints, centerlineEdgePercentage]);
 
   // Handle algorithm change
-  const handleAlgorithmChange = useCallback(async (newAlgorithm: 'edge' | 'full' | 'skeletonize') => {
+  const handleAlgorithmChange = useCallback(async (newAlgorithm: 'edge' | 'full' | 'skeletonize' | 'skeletonize_plus') => {
     setCenterlineAlgorithm(newAlgorithm);
     await fetchCenterlinesPCA(newAlgorithm);
   }, [setCenterlineAlgorithm, fetchCenterlinesPCA]);
@@ -271,7 +282,10 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                 disabled={isLoading}
               />
               <div className="flex flex-col">
-                <span className="text-white font-medium">Edge PCA</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-medium">Edge PCA</span>
+                  <span className="px-2 py-1 text-xs bg-orange-600 text-white rounded-full">DEPRECATED</span>
+                </div>
                 <span className="text-gray-400 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
               </div>
             </label>
@@ -288,6 +302,21 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
               <div className="flex flex-col">
                 <span className="text-white font-medium">Skeletonize</span>
                 <span className="text-gray-400 text-sm">Morphological skeleton extraction using scikit-image</span>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name="centerlineAlgorithm"
+                value="skeletonize_plus"
+                checked={centerlineAlgorithm === 'skeletonize_plus'}
+                onChange={() => handleAlgorithmChange('skeletonize_plus')}
+                className="radio radio-primary"
+                disabled={isLoading}
+              />
+              <div className="flex flex-col">
+                <span className="text-white font-medium">Skeletonize +</span>
+                <span className="text-gray-400 text-sm">Enhanced skeleton extraction with improved accuracy and robustness</span>
               </div>
             </label>
           </div>
