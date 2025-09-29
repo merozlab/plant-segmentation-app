@@ -27,7 +27,7 @@ from mask_to_curvature import (
     get_centerline_edge_pca,
     get_centerline_skeletonize,
 )
-from edge_pca_centerline import multi_contour_centerlines
+from edge_pca_centerline import multi_contour_centerlines, transform_centerline_for_export
 from pycocotools import mask as mask_util
 
 from app_conf import (
@@ -361,8 +361,52 @@ def centerlines_pca() -> Response:
     # Asynchronously save CSVs for each object
     def _save_centerlines_csvs(centerlines_dict, base_path, original_file_names):
         try:
+            # Get image height for y-coordinate transformation
+            image_height = None
+            masks_dir = base_path / "masks"
+            if masks_dir.exists():
+                for obj_dir in masks_dir.iterdir():
+                    if obj_dir.is_dir() and obj_dir.name.startswith("object_"):
+                        mask_files = list(obj_dir.glob("*.bmp"))
+                        if mask_files:
+                            # Read the first available mask to get image dimensions
+                            img = cv2.imread(str(mask_files[0]), cv2.IMREAD_GRAYSCALE)
+                            if img is not None:
+                                image_height = img.shape[0]
+                                break
+            
+            # Transform centerlines for consistent export (only if we have image height)
+            if image_height is not None:
+                transformed_centerlines = {}
+                for obj_name, obj_centerlines in centerlines_dict.items():
+                    transformed_obj_centerlines = []
+                    for centerline in obj_centerlines:
+                        # centerline is in format [x_list, y_list]
+                        if centerline and len(centerline) == 2 and centerline[0] and centerline[1]:
+                            # Convert to list of [x, y] pairs for transformation
+                            xy_pairs = list(zip(centerline[0], centerline[1]))
+                            # Apply transformations (y-flip and direction normalization)
+                            transformed_pairs = transform_centerline_for_export(xy_pairs, image_height)
+                            # Convert back to [x_list, y_list] format
+                            if transformed_pairs:
+                                x_coords, y_coords = zip(*transformed_pairs)
+                                transformed_obj_centerlines.append([list(x_coords), list(y_coords)])
+                            else:
+                                transformed_obj_centerlines.append([[], []])
+                        else:
+                            # Keep empty centerlines as-is
+                            transformed_obj_centerlines.append(centerline)
+                    transformed_centerlines[obj_name] = transformed_obj_centerlines
+                
+                # Use transformed centerlines for CSV generation
+                centerlines_for_csv = transformed_centerlines
+            else:
+                # Fallback to original centerlines if we can't determine image height
+                logger.warning("Could not determine image height for centerline transformation")
+                centerlines_for_csv = centerlines_dict
+            
             centerlines_df = centerlines_to_df(
-                centerlines_dict, frame_names=original_file_names
+                centerlines_for_csv, frame_names=original_file_names
             )
             csv_dir = base_path / "centerlines"
             csv_dir.mkdir(parents=True, exist_ok=True)
@@ -806,6 +850,22 @@ def crop_video():
                 400,
             )
 
+        # Ensure crop dimensions are even for h264 encoding
+        if crop_width % 2 != 0:
+            crop_width -= 1  # Make even by reducing by 1
+            if crop_width <= 0:
+                crop_width = 2
+        if crop_height % 2 != 0:
+            crop_height -= 1  # Make even by reducing by 1  
+            if crop_height <= 0:
+                crop_height = 2
+        
+        # Also ensure crop position is even to avoid sub-pixel issues
+        if crop_x % 2 != 0:
+            crop_x = (crop_x // 2) * 2
+        if crop_y % 2 != 0:
+            crop_y = (crop_y // 2) * 2
+            
         print(
             f"Crop validation passed: {crop_width}x{crop_height} at ({crop_x}, {crop_y}) within {video_width}x{video_height}"
         )
@@ -838,10 +898,27 @@ def crop_video():
         filter_parts.append(f"crop={crop_width}:{crop_height}:{crop_x}:{crop_y}")
 
         # Add scaling after crop to ensure final output respects current resolution limit while preserving aspect ratio
+        # Also ensure dimensions are even for h264 encoding
         current_resolution = get_current_resolution()
         # Only scale if the cropped video exceeds the resolution limit
         if crop_width > current_resolution or crop_height > current_resolution:
-            filter_parts.append(f"scale='min({current_resolution},iw)':'min({current_resolution},ih)':force_original_aspect_ratio=decrease")
+            # Calculate target dimensions in Python to ensure they're even
+            aspect_ratio = crop_width / crop_height
+            if crop_width > crop_height:
+                # Width is the limiting dimension
+                target_width = current_resolution
+                target_height = int(current_resolution / aspect_ratio)
+            else:
+                # Height is the limiting dimension
+                target_height = current_resolution
+                target_width = int(current_resolution * aspect_ratio)
+            
+            # Ensure dimensions are even
+            target_width = max(2, (target_width // 2) * 2)
+            target_height = max(2, (target_height // 2) * 2)
+            
+            filter_parts.append(f"scale={target_width}:{target_height}")
+            print(f"Scaling from {crop_width}x{crop_height} to {target_width}x{target_height}")
 
         # Join filters with commas
         filter_string = ",".join(filter_parts)

@@ -64,7 +64,7 @@ export const defaultMessageMap: MessagesEventMap = {
     options: { type: 'loading', showClose: false, repeat: true, duration: 2000 },
   },
   firstClick: {
-    text: '!!!!! Tip: Click on any object in the video to get started.',
+    text: 'Tip: Click on any object in the video to get started.',
     shown: false,
     options: { expire: false, repeat: false },
   },

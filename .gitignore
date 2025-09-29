@@ -20,3 +20,8 @@ __pypackages__/
 
 node_modules/
 demo/backend/server/test.ipynb
+
+*.bmp
+venv/**
+venv/bin/*
+venv/lib/*

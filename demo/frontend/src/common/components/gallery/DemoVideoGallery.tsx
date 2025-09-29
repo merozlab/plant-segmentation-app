@@ -76,21 +76,35 @@ const makeEvenDimensions = (croppedAreaPixels: any, videoData?: any) => {
 const cropVideoOnBackend = async (videoPath: string, cropSettings: any, videoData?: any): Promise<string> => {
   const { croppedAreaPixels, flipHorizontal, flipVertical } = cropSettings;
 
-  if (!croppedAreaPixels) {
-    throw new Error('No crop area specified');
-  }
-
-  const evenCroppedArea = makeEvenDimensions(croppedAreaPixels, videoData);
-
-  const requestBody = {
+  // For flip-only operations, croppedAreaPixels can be null
+  const requestBody: any = {
     video_path: videoPath,
-    crop_x: evenCroppedArea.x,
-    crop_y: evenCroppedArea.y,
-    crop_width: evenCroppedArea.width,
-    crop_height: evenCroppedArea.height,
     flip_horizontal: flipHorizontal || false,
     flip_vertical: flipVertical || false
   };
+
+  // Add crop parameters - use full video size if no crop area is specified
+  if (croppedAreaPixels) {
+    const evenCroppedArea = makeEvenDimensions(croppedAreaPixels, videoData);
+    requestBody.crop_x = evenCroppedArea.x;
+    requestBody.crop_y = evenCroppedArea.y;
+    requestBody.crop_width = evenCroppedArea.width;
+    requestBody.crop_height = evenCroppedArea.height;
+  } else if (videoData) {
+    // For flip-only operations, crop to full video size with even dimensions
+    const fullVideoCrop = makeEvenDimensions({
+      x: 0,
+      y: 0,
+      width: videoData.width,
+      height: videoData.height
+    }, videoData);
+    requestBody.crop_x = fullVideoCrop.x;
+    requestBody.crop_y = fullVideoCrop.y;
+    requestBody.crop_width = fullVideoCrop.width;
+    requestBody.crop_height = fullVideoCrop.height;
+  } else {
+    throw new Error('No crop area or video data specified');
+  }
 
   const response = await fetch('http://localhost:7264/crop_video', {
     method: 'POST',
@@ -141,15 +155,15 @@ const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
       return videoData;
     }
 
-    // Actually crop the video if crop area is specified
-    if (evenCroppedAreaPixels) {
+    // Process the video if there's either crop area OR flip operations
+    if (evenCroppedAreaPixels || cropSettings.flipHorizontal || cropSettings.flipVertical) {
       const croppedVideoPath = await cropVideoOnBackend(videoData.path, {
-        croppedAreaPixels: evenCroppedAreaPixels,
+        croppedAreaPixels: evenCroppedAreaPixels, // Can be null for flip-only operations
         flipHorizontal: cropSettings.flipHorizontal,
         flipVertical: cropSettings.flipVertical
       }, videoData);
 
-      // Return new video data with cropped path
+      // Return new video data with processed path
       return {
         ...videoData,
         path: croppedVideoPath,
@@ -158,7 +172,7 @@ const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
       };
     }
 
-    // Fallback: return original video data
+    // Fallback: return original video data (no changes made)
     return videoData;
   } catch (error) {
     console.error('Error processing video with crop:', error);
@@ -224,6 +238,16 @@ const styles = stylex.create({
     fontSize: '0.875rem',
     fontWeight: 'bold',
     zIndex: 20,
+  },
+  instructionText: {
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    border: '1px solid rgba(255, 193, 7, 0.3)',
+    borderRadius: 8,
+    padding: spacing[3],
+    marginBottom: spacing[4],
+    fontSize: '0.9rem',
+    color: '#fff',
+    lineHeight: 1.5,
   },
 });
 
@@ -373,8 +397,8 @@ export default function DemoVideoGallery({ }: Props) {
       const scaleY = currentResolution / height;
       const scale = Math.min(scaleX, scaleY); // Use the smaller scale to ensure it fits
 
-      resizedWidth = Math.round(width * scale);
-      resizedHeight = Math.round(height * scale);
+      resizedWidth = Math.max(2, Math.round((width * scale) / 2) * 2);
+      resizedHeight = Math.max(2, Math.round((height * scale) / 2) * 2);
     }
 
     return { width, height, willResize, color, resizedWidth, resizedHeight };
@@ -510,6 +534,10 @@ export default function DemoVideoGallery({ }: Props) {
             <div {...stylex.props(styles.title)}>
               Crop and adjust your video
             </div>
+          </div>
+          
+          <div {...stylex.props(styles.instructionText)}>
+            <strong>💡 For best results with centerline extraction:</strong> Position plants with their <strong>base at the bottom / left</strong> of the frame (depending on orientation). Use the flip controls below if your plants appear upside-down or mirrored. This ensures consistent centerline direction in your exported data.
           </div>
 
           {/* Error message display */}

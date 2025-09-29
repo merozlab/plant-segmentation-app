@@ -29,9 +29,6 @@ REQUIRED_PACKAGES = [
     "iopath>=0.1.10",
     "pillow>=9.4.0",
     "scipy>=1.14.1",
-    "stqdm>=0.0.5",
-    "streamlit==1.40.0",
-    "streamlit-image-annotation>=0.4.0",
 ]
 
 print("📦 Installing base SAM-2 dependencies...")
