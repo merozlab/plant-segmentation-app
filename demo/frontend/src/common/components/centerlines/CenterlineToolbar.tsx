@@ -31,6 +31,7 @@ import OptionButton from '@/common/components/options/OptionButton';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import ToolbarBottomActionsWrapper from '../toolbar/ToolbarBottomActionsWrapper';
+import SkeletonizePlusInfoModal from '@/common/components/modals/SkeletonizePlusInfoModal';
 type Props = {
   onTabChange: (newIndex: number) => void;
 };
@@ -49,6 +50,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   const { enqueueMessage } = useMessagesSnackbar();
   const [isLoading, setIsLoading] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [localEdgePercentage, setLocalEdgePercentage] = useState<string>('');
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const debounceEdgePercentageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -283,8 +285,21 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                 className="radio radio-primary"
                 disabled={isLoading}
               />
-              <div className="flex flex-col">
-                <span className="text-white font-medium">Skeletonize+</span>
+              <div className="flex flex-col flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-medium">Skeletonize+</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsInfoModalOpen(true);
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                    aria-label="Show algorithm information"
+                  >
+                    <Information className="w-4 h-4" />
+                  </button>
+                </div>
                 <span className="text-gray-400 text-sm">Enhanced skeleton extraction with improved accuracy and robustness</span>
               </div>
             </label>
@@ -596,6 +611,12 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
           onRestartSession={() => onTabChange(OBJECT_TOOLBAR_INDEX)}
         />
       </ToolbarBottomActionsWrapper>
+
+      {/* Skeletonize+ Info Modal */}
+      <SkeletonizePlusInfoModal
+        visible={isInfoModalOpen}
+        onClose={() => setIsInfoModalOpen(false)}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@
 
 import logging
 import json
+import csv
 import zipfile
 import time
 import threading
@@ -444,63 +445,38 @@ def centerlines_skeletonize_plus() -> Response:
             image_height = None
             masks_dir = base_path / "masks"
             if masks_dir.exists():
-                for obj_dir in masks_dir.iterdir():
-                    if obj_dir.is_dir() and obj_dir.name.startswith("object_"):
-                        mask_files = list(obj_dir.glob("*.bmp"))
-                        if mask_files:
-                            # Read the first available mask to get image dimensions
-                            img = cv2.imread(str(mask_files[0]), cv2.IMREAD_GRAYSCALE)
-                            if img is not None:
-                                image_height = img.shape[0]
-                                break
-            
-            # Transform centerlines for consistent export (only if we have image height)
-            if image_height is not None:
-                transformed_centerlines = {}
-                for obj_name, obj_centerlines in centerlines_dict.items():
-                    transformed_obj_centerlines = []
-                    for centerline in obj_centerlines:
-                        # centerline is in format [x_list, y_list]
-                        if centerline and len(centerline) == 2 and centerline[0] and centerline[1]:
-                            # Convert to list of [x, y] pairs for transformation
-                            xy_pairs = list(zip(centerline[0], centerline[1]))
-                            # Apply transformations (y-flip and direction normalization)
-                            transformed_pairs = transform_centerline_for_export(xy_pairs, image_height)
-                            # Convert back to [x_list, y_list] format
-                            if transformed_pairs:
-                                x_coords, y_coords = zip(*transformed_pairs)
-                                transformed_obj_centerlines.append([list(x_coords), list(y_coords)])
-                            else:
-                                transformed_obj_centerlines.append([[], []])
-                        else:
-                            # Keep empty centerlines as-is
-                            transformed_obj_centerlines.append(centerline)
-                    transformed_centerlines[obj_name] = transformed_obj_centerlines
-                
-                # Use transformed centerlines for CSV generation
-                centerlines_for_csv = transformed_centerlines
-            else:
-                # Fallback to original centerlines if we can't determine image height
-                logger.warning("Could not determine image height for centerline transformation")
-                centerlines_for_csv = centerlines_dict
-            
-            centerlines_df = centerlines_to_df(
-                centerlines_for_csv, frame_names=original_file_names
-            )
-            csv_dir = base_path / "centerlines"
-            csv_dir.mkdir(parents=True, exist_ok=True)
-            for obj, df in centerlines_df.items():
-                df = df.rename({"x": "x (pixels)", "y": "y (pixels)"}, axis=1)
-                df.to_csv(csv_dir / f"{obj}.csv", index=False)
-            # After CSVs are written, zip the centerlines folder
-            try:
-                zip_name = f"{base_path.name}_centerlines.zip"
-                zip_path = base_path / zip_name
-                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-                    for file in csv_dir.glob("*.csv"):
-                        zipf.write(file, str(file.relative_to(csv_dir)))
-            except Exception as zip_err:
-                logger.error(f"Error zipping centerlines CSVs: {zip_err}")
+                first_object_dir = next(masks_dir.iterdir(), None)
+                if first_object_dir and first_object_dir.is_dir():
+                    first_frame = next(first_object_dir.glob("*.bmp"), None)
+                    if first_frame:
+                        img = cv2.imread(str(first_frame))
+                        if img is not None:
+                            image_height = img.shape[0]
+
+            centerlines_path = base_path / "centerlines"
+            centerlines_path.mkdir(exist_ok=True)
+
+            for obj_name, frame_centerlines in centerlines_dict.items():
+                # Create CSV for this object
+                csv_path = centerlines_path / f"{obj_name}.csv"
+                with open(csv_path, "w", newline="") as csvfile:
+                    fieldnames = ["frame", "x (pixels)", "y (pixels)"]
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+
+                    for frame_idx, (x_coords, y_coords) in enumerate(frame_centerlines):
+                        for x, y in zip(x_coords, y_coords):
+                            # Transform y-coordinate if we have image height
+                            transformed_y = image_height - y if image_height else y
+                            writer.writerow({
+                                "frame": frame_idx,
+                                "x (pixels)": x,
+                                "y (pixels)": transformed_y
+                            })
+
+            print(f"Saved centerline CSVs for {len(centerlines_dict)} objects")
+        except Exception as e:
+            print(f"Error saving centerlines CSVs: {e}")
         except Exception as e:
             logger.error(f"Error saving centerlines CSVs: {e}")
 

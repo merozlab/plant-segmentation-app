@@ -125,9 +125,12 @@ export default function MoreOptionsToolbarBottomActions({ onTabChange }: Props) 
       {/* Next button with loading state */}
       <PrimaryCTAButton
         onClick={handleSwitchToCenterlineTab}
-        endIcon={isLoading ? null : <ChevronRight />}
-        disabled={isLoading}>
-        {isLoading ? 'Getting centerlines...' : 'Next'}
+        endIcon={<ChevronRight />}
+        loadingProps={{
+          loading: isLoading,
+          label: 'Getting centerlines...'
+        }}>
+        Next
       </PrimaryCTAButton>
     </ToolbarBottomActionsWrapper>
   );

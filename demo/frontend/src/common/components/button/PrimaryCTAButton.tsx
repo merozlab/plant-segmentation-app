@@ -14,26 +14,40 @@
  * limitations under the License.
  */
 import GradientBorder from '@/common/components/button/GradientBorder';
+import { Loading } from 'react-daisyui';
 import type {ReactNode} from 'react';
 
 type Props = {
   disabled?: boolean;
   endIcon?: ReactNode;
+  loadingProps?: {
+    loading: boolean;
+    label?: string;
+  };
 } & React.DOMAttributes<HTMLButtonElement>;
 
 export default function PrimaryCTAButton({
   children,
   disabled,
   endIcon,
+  loadingProps,
   ...props
 }: Props) {
+  const isLoading = loadingProps?.loading === true;
+  const effectiveDisabled = disabled || isLoading;
+
   return (
-    <GradientBorder disabled={disabled}>
+    <GradientBorder disabled={effectiveDisabled}>
       <button
-        className={`btn ${disabled && 'btn-disabled'} !rounded-full !bg-black !text-white !border-none`}
+        className={`btn ${effectiveDisabled && 'btn-disabled'} !rounded-full !bg-black !text-white !border-none`}
         {...props}>
-        {children}
-        {endIcon != null && endIcon}
+        <span className="flex items-center gap-2">
+          {isLoading && <Loading size="sm" />}
+          {isLoading && loadingProps?.label != null
+            ? loadingProps.label
+            : children}
+          {!isLoading && endIcon != null && endIcon}
+        </span>
       </button>
     </GradientBorder>
   );
