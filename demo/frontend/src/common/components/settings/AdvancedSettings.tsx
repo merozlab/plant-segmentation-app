@@ -14,120 +14,10 @@
  * limitations under the License.
  */
 import { ChevronDown, ChevronUp, Settings } from '@carbon/icons-react';
-import stylex from '@stylexjs/stylex';
 import { useCallback, useEffect, useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 import { INFERENCE_API_ENDPOINT } from '@/demo/DemoConfig';
 import { selectedModelAtom, selectedResolutionAtom, updateStatusAtom, currentResolutionAtom } from '@/demo/atoms';
-
-const styles = stylex.create({
-  container: {
-    borderRadius: 8,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 16,
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    cursor: 'pointer',
-    ':hover': {
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-  },
-  headerContent: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
-  title: {
-    fontSize: '0.875rem',
-    fontWeight: 600,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  content: {
-    padding: '0 12px 12px 12px',
-  },
-  modelGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr',
-    gap: 8,
-  },
-  modelOption: {
-    padding: 12,
-    borderRadius: 6,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      borderColor: 'rgba(255, 255, 255, 0.3)',
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-  },
-  selectedModel: {
-    borderColor: '#0084ff',
-    backgroundColor: 'rgba(0, 132, 255, 0.1)',
-  },
-  modelName: {
-    fontSize: '0.875rem',
-    fontWeight: 600,
-    marginBottom: 4,
-  },
-  modelStats: {
-    fontSize: '0.75rem',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 4,
-  },
-  modelDescription: {
-    fontSize: '0.75rem',
-    color: 'rgba(255, 255, 255, 0.6)',
-    lineHeight: 1.3,
-  },
-  loading: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: '0.75rem',
-    textAlign: 'center',
-    padding: 16,
-  },
-  errorText: {
-    color: '#ff4444',
-    fontSize: '0.75rem',
-  },
-  successText: {
-    color: '#44ff44',
-    fontSize: '0.75rem',
-  },
-  resolutionSection: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-  },
-  resolutionGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-    gap: 8,
-    marginTop: 8,
-  },
-  resolutionOption: {
-    padding: 8,
-    borderRadius: 4,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    cursor: 'pointer',
-    textAlign: 'center',
-    fontSize: '0.75rem',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      borderColor: 'rgba(255, 255, 255, 0.3)',
-      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-  },
-  selectedResolution: {
-    borderColor: '#0084ff',
-    backgroundColor: 'rgba(0, 132, 255, 0.1)',
-  },
-});
 
 type ModelInfo = {
   max_frames: number;
@@ -247,33 +137,33 @@ export default function AdvancedSettings() {
   };
 
   return (
-    <div {...stylex.props(styles.container)}>
+    <div className="rounded-lg border border-white/10 bg-white/5 mb-4">
       <div
-        {...stylex.props(styles.header)}
+        className="flex items-center justify-between p-3 cursor-pointer hover:bg-white/5"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div {...stylex.props(styles.headerContent)}>
+        <div className="flex items-center gap-2">
           <Settings size={16} />
-          <span {...stylex.props(styles.title)}>Advanced Settings</span>
+          <span className="text-sm font-semibold text-white/90">Advanced Settings</span>
         </div>
         {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
       </div>
 
       {isExpanded && (
-        <div {...stylex.props(styles.content)}>
+        <div className="px-3 pb-3 max-h-96 overflow-y-auto">
           {loading ? (
-            <div {...stylex.props(styles.loading)}>Loading GPU information...</div>
+            <div className="text-white/60 text-xs text-center p-4">Loading GPU information...</div>
           ) : (
             <>
               {gpuInfo && (
                 <>
-                  <div style={{ marginBottom: 12, fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+                  <div className="mb-3 text-xs text-white/70">
                     <strong>GPU:</strong> {gpuInfo.gpu_available ? 'Available' : 'Not Available'}
                     {gpuInfo.total_memory && (
-                      <div style={{ marginTop: 4 }}>
+                      <div className="mt-1">
                         <strong>Total Memory:</strong> {formatMemory(gpuInfo.total_memory)}
                         {gpuInfo.available_memory && (
-                          <span style={{ marginLeft: 8 }}>
+                          <span className="ml-2">
                             <strong>Available:</strong> {formatMemory(gpuInfo.available_memory)}
                           </span>
                         )}
@@ -281,27 +171,28 @@ export default function AdvancedSettings() {
                     )}
                   </div>
 
-                  <div style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
+                  <div className="mb-2 text-sm font-semibold">
                     Model Size Selection
                   </div>
 
-                  <div {...stylex.props(styles.modelGrid)}>
+                  <div className="grid grid-cols-1 gap-2">
                     {Object.entries(gpuInfo.model_estimates).map(([modelSize, info]) => (
                       <div
                         key={modelSize}
-                        {...stylex.props(
-                          styles.modelOption,
-                          selectedModel === modelSize && styles.selectedModel
-                        )}
+                        className={`p-3 rounded-md border cursor-pointer transition-all duration-200 ${
+                          selectedModel === modelSize
+                            ? 'border-[#0084ff] bg-[#0084ff]/10'
+                            : 'border-white/10 hover:border-white/30 hover:bg-white/5'
+                        }`}
                         onClick={() => handleModelChange(modelSize)}
                       >
-                        <div {...stylex.props(styles.modelName)}>
+                        <div className="text-sm font-semibold mb-1">
                           {MODEL_DISPLAY_NAMES[modelSize as keyof typeof MODEL_DISPLAY_NAMES]}
                         </div>
-                        <div {...stylex.props(styles.modelStats)}>
+                        <div className="text-xs text-white/70 mb-1">
                           {Math.round(info.max_frames / 100) * 100} Frames • Memory per frame: {info.memory_per_frame}
                         </div>
-                        <div {...stylex.props(styles.modelDescription)}>
+                        <div className="text-xs text-white/60 leading-tight">
                           {MODEL_DESCRIPTIONS[modelSize as keyof typeof MODEL_DESCRIPTIONS]}
                         </div>
                       </div>
@@ -309,21 +200,22 @@ export default function AdvancedSettings() {
                   </div>
 
                   {gpuInfo.model_estimates[selectedModel]?.resolutions && (
-                    <div {...stylex.props(styles.resolutionSection)}>
-                      <div style={{ marginBottom: 8, fontSize: '0.875rem', fontWeight: 600 }}>
+                    <div className="mt-4 pt-3 border-t border-white/10">
+                      <div className="mb-2 text-sm font-semibold">
                         Resolution Selection
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.7)', marginBottom: 8 }}>
+                      <div className="text-xs text-white/70 mb-2">
                         Higher resolutions provide better quality but use more memory
                       </div>
-                      <div {...stylex.props(styles.resolutionGrid)}>
+                      <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
                         {gpuInfo.model_estimates[selectedModel].resolutions!.map((resolution) => (
                           <div
                             key={resolution}
-                            {...stylex.props(
-                              styles.resolutionOption,
-                              selectedResolution === resolution && styles.selectedResolution
-                            )}
+                            className={`p-2 rounded border cursor-pointer text-center text-xs transition-all duration-200 ${
+                              selectedResolution === resolution
+                                ? 'border-[#0084ff] bg-[#0084ff]/10'
+                                : 'border-white/10 hover:border-white/30 hover:bg-white/5'
+                            }`}
                             onClick={() => handleResolutionChange(resolution)}
                           >
                             {resolution}px
@@ -335,10 +227,9 @@ export default function AdvancedSettings() {
 
                   {updateStatus && (
                     <div
-                      {...stylex.props(
-                        updateStatus.includes('Error') ? styles.errorText : styles.successText
-                      )}
-                      style={{ marginTop: 8 }}
+                      className={`text-xs mt-2 ${
+                        updateStatus.includes('Error') ? 'text-[#ff4444]' : 'text-[#44ff44]'
+                      }`}
                     >
                       {updateStatus}
                     </div>

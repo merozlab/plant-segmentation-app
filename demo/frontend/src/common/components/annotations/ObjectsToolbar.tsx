@@ -43,31 +43,31 @@ export default function ObjectsToolbar({onTabChange}: Props) {
   const isObjectLimitReached = useAtomValue(isTrackletObjectLimitReachedAtom);
   const isAddObjectEnabled = useAtomValue(isAddObjectEnabledAtom);
 
-  if (!isFirstClickMade) {
-    return <FirstClickView />;
-  }
-
   return (
     <div className="flex flex-col h-full">
       <ObjectsToolbarHeader />
-      <PointsImportExport />
-      <div className="grow w-full overflow-y-auto">
-        {tracklets.map(tracklet => {
-          return (
-            <ToolbarObject
-              key={tracklet.id}
-              label={getObjectLabel(tracklet)}
-              tracklet={tracklet}
-              isActive={activeTracklet?.id === tracklet.id}
-              onClick={() => {
-                setActiveTrackletId(tracklet.id);
-              }}
-            />
-          );
-        })}
-        {isAddObjectEnabled && <AddObjectButton />}
-        {isObjectLimitReached && <LimitNotice />}
-      </div>
+      {!isFirstClickMade ? (
+        <FirstClickView />
+      ) : (
+        <div className="flex-1 flex flex-col gap-3 overflow-y-auto min-h-0 px-8">
+          {tracklets.map(tracklet => {
+            return (
+              <ToolbarObject
+                key={tracklet.id}
+                label={getObjectLabel(tracklet)}
+                tracklet={tracklet}
+                isActive={activeTracklet?.id === tracklet.id}
+                onClick={() => {
+                  setActiveTrackletId(tracklet.id);
+                }}
+              />
+            );
+          })}
+          {isAddObjectEnabled && <AddObjectButton />}
+          {isObjectLimitReached && <LimitNotice />}
+          <PointsImportExport />
+        </div>
+      )}
       <ObjectsToolbarBottomActions onTabChange={onTabChange} />
     </div>
   );

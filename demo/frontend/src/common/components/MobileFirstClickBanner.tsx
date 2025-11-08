@@ -33,9 +33,6 @@ const styles = stylex.create({
 export default function MobileFirstClickBanner() {
   return (
     <div {...stylex.props(styles.container)}>
-      <div className="flex text-white text-lg">
-        Click an object in the video to start
-      </div>
       <div className="text-sm text-[#A7B3BF]">
         <p>
           You&apos;ll be able to use {DEMO_SHORT_NAME} to make fun edits to any

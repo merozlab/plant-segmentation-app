@@ -18,6 +18,7 @@ import DemoVideoGallery from '@/common/components/gallery/DemoVideoGallery';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import AdvancedSettings from '@/common/components/settings/AdvancedSettings';
 import { useEffect, useRef } from 'react';
+import PointsImportExport from './PointsImportExport';
 
 export default function FirstClickView() {
   const isFirstClickMessageShown = useRef(false);
@@ -31,9 +32,7 @@ export default function FirstClickView() {
   }, [enqueueMessage]);
 
   return (
-    <div className="w-full h-full flex flex-col p-8">
-      <h2 className="text-2xl pb-4">Click an object in the video to start</h2>
-      <div className="grow flex flex-col gap-6 overflow-y-auto">
+      <div className="flex-1 flex flex-col gap-3 overflow-y-auto min-h-0 px-8">
         <div className='bg-graydark-700 p-3 rounded-lg'>
           <p className="!text-gray-60 text-xs">
             If you are uploading a video, make sure it is at 24fps. <br />
@@ -43,10 +42,9 @@ export default function FirstClickView() {
           </p>
         </div>
         <AdvancedSettings />
-
+        <PointsImportExport />
+        <DefaultVideoGalleryModalTrigger />
+        <DemoVideoGallery />
       </div>
-      <DefaultVideoGalleryModalTrigger />
-      <DemoVideoGallery />
-    </div>
   );
 }

@@ -37,7 +37,7 @@ export default function AddObjectButton() {
   return (
     <div
       onClick={addObject}
-      className="group flex justify-start mx-4 px-4 bg-transparent text-white !rounded-xl border-none cursor-pointer">
+      className="group flex justify-start px-4 bg-transparent text-white !rounded-xl border-none cursor-pointer">
       <div className="flex gap-6 items-center">
         <div className=" group-hover:bg-graydark-700 border border-white relative h-12 w-12 md:w-20 md:h-20 shrink-0 rounded-lg flex items-center justify-center">
           <Add size={36} className="group-hover:text-white text-gray-300" />

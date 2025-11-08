@@ -19,6 +19,8 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { useRef } from 'react';
 import useVideo from '@/common/components/video/editor/useVideo';
 import { SegmentationPoint } from '@/common/tracker/Tracker';
+import { Button } from 'react-daisyui';
+import useMessagesSnackbar from '@/common/components/snackbar/useMessagesSnackbar';
 
 type PointsExportData = {
   version: string;
@@ -54,6 +56,7 @@ export default function PointsImportExport() {
   const setActiveTrackletId = useSetAtom(activeTrackletObjectIdAtom);
   const video = useVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { enqueueMessage } = useMessagesSnackbar();
 
   const handleExport = () => {
     // Collect all points from all tracklets
@@ -93,12 +96,12 @@ export default function PointsImportExport() {
 
       // Validate the data structure
       if (!importData.version || !importData.tracklets) {
-        alert('Invalid JSON format');
+        enqueueMessage('Invalid JSON format', { type: 'warning', duration: 4000 });
         return;
       }
 
       if (!video) {
-        alert('Video player not initialized');
+        enqueueMessage('Video player not initialized', { type: 'warning', duration: 4000 });
         return;
       }
 
@@ -189,10 +192,16 @@ export default function PointsImportExport() {
       video.frame = originalFrame;
       await waitForFrame(originalFrame);
 
-      alert(`Import completed!\nAdded: ${pointsAdded} points\nSkipped: ${pointsSkipped} duplicate points`);
+      enqueueMessage(
+        `Import completed. Added: ${pointsAdded} points, Skipped: ${pointsSkipped} duplicates`,
+        { type: 'info', duration: 5000 }
+      );
     } catch (error) {
       console.error('Error importing points:', error);
-      alert('Error importing points. Please check the file format.');
+      enqueueMessage('Error importing points. Please check the file format.', {
+        type: 'warning',
+        duration: 4000,
+      });
     } finally {
       // Reset the file input
       if (fileInputRef.current) {
@@ -202,25 +211,27 @@ export default function PointsImportExport() {
   };
 
   return (
-    <div className="flex gap-2 p-3 border-t border-gray-700">
-      <button
+    <div className="flex gap-2">
+      <Button
+        color="ghost"
         onClick={handleExport}
         disabled={tracklets.length === 0}
-        className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm flex-1"
+        className="!px-4 !rounded-full font-medium text-white hover:bg-black flex-1 !text-sm"
+        startIcon={<Download size={16} />}
         title="Export all points as JSON"
       >
-        <Download size={16} />
         Export Points
-      </button>
+      </Button>
 
-      <button
+      <Button
+        color="ghost"
         onClick={() => fileInputRef.current?.click()}
-        className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm flex-1"
+        className="!px-4 !rounded-full font-medium text-white hover:bg-black flex-1 !text-sm"
+        startIcon={<Upload size={16} />}
         title="Import points from JSON"
       >
-        <Upload size={16} />
         Import Points
-      </button>
+      </Button>
 
       <input
         ref={fileInputRef}

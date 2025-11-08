@@ -17,7 +17,7 @@ import {InformationFilled} from '@carbon/icons-react';
 
 export default function LimitNotice() {
   return (
-    <div className="mt-6 gap-3 mx-6 flex items-center text-gray-400">
+    <div className="flex items-center gap-3 text-gray-400">
       <div>
         <InformationFilled size={32} />
       </div>
