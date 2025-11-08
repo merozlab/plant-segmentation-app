@@ -109,7 +109,15 @@ class InferenceAPI:
 
         self.device = device
         self.predictor = build_sam2_video_predictor(
-            model_cfg, checkpoint, device=device
+            model_cfg,
+            checkpoint,
+            device=device,
+            hydra_overrides_extra=[
+                # Treat all frames with correction clicks as conditioning frames
+                # This ensures that when users add points after propagation, those points
+                # are properly used as conditioning frames for re-propagation
+                "++model.add_all_frames_to_correct_as_cond=true",
+            ],
         )
         self.inference_lock = Lock()
         
@@ -362,6 +370,8 @@ class InferenceAPI:
                         f"invalid propagation direction: {propagation_direction}"
                     )
 
+                self.__clear_non_cond_outputs(inference_state)
+
                 # First doing the forward propagation
                 if propagation_direction in ["both", "forward"]:
                     for outputs in self.predictor.propagate_in_video(
@@ -424,6 +434,25 @@ class InferenceAPI:
         session = self.__get_session(request.session_id)
         session["canceled"] = True
         return CancelPorpagateResponse(success=True)
+
+    def __clear_non_cond_outputs(self, inference_state, obj_ids=None):
+        """Clear non-conditioning frame outputs to force re-computation during re-propagation."""
+        output_dict = inference_state["output_dict_per_obj"]
+        frames_tracked = inference_state["frames_tracked_per_obj"]
+
+        for obj_idx, obj_output in output_dict.items():
+            if obj_ids is not None:
+                obj_id = next(
+                    (k for k, v in inference_state["obj_id_to_idx"].items() if v == obj_idx),
+                    None
+                )
+                if obj_id not in obj_ids:
+                    continue
+
+            obj_output["non_cond_frame_outputs"].clear()
+
+            if obj_idx in frames_tracked:
+                frames_tracked[obj_idx].clear()
 
     def __get_rle_mask_list(
         self, object_ids: List[int], masks: np.ndarray
@@ -496,8 +525,8 @@ class InferenceAPI:
                         # Clear any cached tensors in the inference state
                         if hasattr(inference_state, 'obj_id_to_frames'):
                             inference_state.obj_id_to_frames.clear()
-                        if hasattr(inference_state, 'obj_ids_to_obj_idx'):
-                            inference_state.obj_ids_to_obj_idx.clear()
+                        if hasattr(inference_state, 'obj_id_to_idx'):
+                            inference_state.obj_id_to_idx.clear()
                     
                     # Force GPU memory cleanup
                     torch.cuda.empty_cache()

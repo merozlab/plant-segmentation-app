@@ -20,7 +20,7 @@ import useScreenSize from '@/common/screen/useScreenSize';
 import { uploadingStateAtom, uploadErrorMessageAtom, uploadConfirmationModalAtom, uploadedVideoDataAtom } from '@/demo/atoms';
 import { Close, CloudUpload } from '@carbon/icons-react';
 import { useSetAtom } from 'jotai';
-import { MAX_FILE_SIZE_IN_MB, MAX_ZIP_FILE_SIZE_MB } from '@/demo/DemoConfig';
+import { MAX_FILE_SIZE_IN_MB } from '@/demo/DemoConfig';
 
 
 export default function DefaultVideoGalleryModalTrigger() {
@@ -67,14 +67,14 @@ export default function DefaultVideoGalleryModalTrigger() {
               <>
                 Upload video or ZIP of images{' '}
                 <div className="text-xs opacity-70">
-                  MP4 (max {MAX_FILE_SIZE_IN_MB}MB) or ZIP of images (max {MAX_ZIP_FILE_SIZE_MB}MB)
+                  24fps MP4 or ZIP of images (max {MAX_FILE_SIZE_IN_MB}MB)
                 </div>
               </>
             ) : (
               <>
                 Upload video or ZIP of images{' '}
                 <div className="text-xs opacity-70">
-                  MP4 (max {MAX_FILE_SIZE_IN_MB}MB) or ZIP of images (max {MAX_ZIP_FILE_SIZE_MB}MB)
+                  24fps MP4 or ZIP of images (max {MAX_FILE_SIZE_IN_MB}MB)
                 </div>
               </>
             )

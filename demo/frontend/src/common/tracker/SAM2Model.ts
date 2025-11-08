@@ -520,6 +520,7 @@ export class SAM2Model extends Tracker {
 
       // 3. parse stream response and update masks in session objects
       let isAborted = false;
+      let frameCount = 0;
       for await (const result of generator) {
         if ('aborted' in result) {
           this._updateStreamingState('aborting');
@@ -529,12 +530,14 @@ export class SAM2Model extends Tracker {
         } else {
           await this._updateTrackletMasks(result, false);
           this._updateStreamingState('partial');
+          frameCount++;
         }
       }
 
       if (!isAborted) {
-        // Mark session needing propagation when point is set
         this._updateStreamingState('full');
+        this._updateTracklets();
+        this._context.goToFrame(this._context.frameIndex);
       }
     } catch (error) {
       Logger.error(error);

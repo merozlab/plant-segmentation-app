@@ -33,14 +33,6 @@ export default function FirstClickView() {
 
   return (
       <div className="flex-1 flex flex-col gap-3 overflow-y-auto min-h-0 px-8">
-        <div className='bg-graydark-700 p-3 rounded-lg'>
-          <p className="!text-gray-60 text-xs">
-            If you are uploading a video, make sure it is at 24fps. <br />
-          </p>
-          <p className="!text-gray-60 text-xs">
-            To start, click any object in the video.
-          </p>
-        </div>
         <AdvancedSettings />
         <PointsImportExport />
         <DefaultVideoGalleryModalTrigger />
