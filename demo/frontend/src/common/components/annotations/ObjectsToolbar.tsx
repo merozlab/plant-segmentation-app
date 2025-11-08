@@ -20,6 +20,7 @@ import ObjectsToolbarBottomActions from '@/common/components/annotations/Objects
 import ObjectsToolbarHeader from '@/common/components/annotations/ObjectsToolbarHeader';
 import {getObjectLabel} from '@/common/components/annotations/ObjectUtils';
 import ToolbarObject from '@/common/components/annotations/ToolbarObject';
+import PointsImportExport from '@/common/components/annotations/PointsImportExport';
 import {
   activeTrackletObjectAtom,
   activeTrackletObjectIdAtom,
@@ -49,6 +50,7 @@ export default function ObjectsToolbar({onTabChange}: Props) {
   return (
     <div className="flex flex-col h-full">
       <ObjectsToolbarHeader />
+      <PointsImportExport />
       <div className="grow w-full overflow-y-auto">
         {tracklets.map(tracklet => {
           return (
