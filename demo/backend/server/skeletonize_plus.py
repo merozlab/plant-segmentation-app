@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 from typing import Tuple, List, Optional
 
 
-def distribute_points(
+def _distribute_points(
     x: np.ndarray, y: np.ndarray, n_points: int
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Redistribute points uniformly along a contour"""
@@ -19,7 +19,7 @@ def distribute_points(
     return x_uniform, y_uniform
 
 
-def apply_pca(
+def _apply_pca(
     points: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Apply PCA to get principal components"""
@@ -39,7 +39,7 @@ def apply_pca(
     return mu, v1, v2, eigenvals
 
 
-def find_mask_centroid(mask: np.ndarray) -> np.ndarray:
+def _find_mask_centroid(mask: np.ndarray) -> np.ndarray:
     """Find the centroid of the mask that is guaranteed to be inside"""
     # Use moments to find centroid
     moments = cv2.moments(mask)
@@ -57,7 +57,7 @@ def find_mask_centroid(mask: np.ndarray) -> np.ndarray:
     return mask_points[nearest_idx]
 
 
-def find_width_intersections(
+def _find_width_intersections(
     mask: np.ndarray, centroid: np.ndarray, width_axis: np.ndarray
 ) -> List[np.ndarray]:
     """Find intersections of width axis with mask edges"""
@@ -90,7 +90,7 @@ def find_width_intersections(
     return intersections
 
 
-def calculate_adaptive_parameters(
+def _calculate_adaptive_parameters(
     contour: np.ndarray, mask: np.ndarray
 ) -> Tuple[float, int]:
     """
@@ -109,14 +109,14 @@ def calculate_adaptive_parameters(
 
     # Step 1: Apply PCA to redistributed contour
     x_sorted, y_sorted = contour_points[:, 0], contour_points[:, 1]
-    x_uniform, y_uniform = distribute_points(x_sorted, y_sorted, len(contour_points))
+    x_uniform, y_uniform = _distribute_points(x_sorted, y_sorted, len(contour_points))
     redistributed_contour = np.column_stack((x_uniform, y_uniform))
 
-    _, _, width_axis, _ = apply_pca(redistributed_contour)
-    mask_centroid = find_mask_centroid(mask)
+    _, _, width_axis, _ = _apply_pca(redistributed_contour)
+    mask_centroid = _find_mask_centroid(mask)
     # Step 2: Estimate width from eigenvalues ratio
     # For rod-like shapes, width is approximately related to the square root of the smaller eigenvalue
-    width_intersections = find_width_intersections(mask, mask_centroid, width_axis)
+    width_intersections = _find_width_intersections(mask, mask_centroid, width_axis)
     if len(width_intersections) < 2:
         raise ValueError("Could not find sufficient width intersections in contour")
     width = np.linalg.norm(width_intersections[0] - width_intersections[1])
@@ -139,7 +139,7 @@ def calculate_adaptive_parameters(
     return edge_percentage, n_points
 
 
-def find_endpoints_with_skeleton(mask):
+def _find_endpoints_with_skeleton(mask):
     """
     Find rod endpoints by skeletonizing the mask and finding skeleton endpoints.
     """
@@ -199,7 +199,7 @@ def find_endpoints_with_skeleton(mask):
     return endpoints[0], endpoints[1], skeleton
 
 
-def line_segment_intersect_contour(line_start, line_end, contour_points):
+def _line_segment_intersect_contour(line_start, line_end, contour_points):
     """Find all intersections between a line segment and contour segments"""
     intersections = []
 
@@ -228,7 +228,7 @@ def line_segment_intersect_contour(line_start, line_end, contour_points):
     return np.array(intersections) if intersections else np.array([]).reshape(0, 2)
 
 
-def get_contour_intercept_with_rectangle_axis(
+def _get_contour_intercept_with_rectangle_axis(
     rectangle, skeleton_endpoint, contour_points
 ):
     """Find where the line cutting through rectangle's shorter axis intercepts the contour"""
@@ -263,7 +263,7 @@ def get_contour_intercept_with_rectangle_axis(
     extended_line_start = line_start - 2 * line_direction
     extended_line_end = line_end + 2 * line_direction
 
-    intersections = line_segment_intersect_contour(
+    intersections = _line_segment_intersect_contour(
         extended_line_start, extended_line_end, contour_points
     )
 
@@ -285,7 +285,7 @@ def get_contour_intercept_with_rectangle_axis(
     return chosen_intersection
 
 
-def get_endpoint_neighborhood_adaptive(endpoint, contour_points, edge_percentage):
+def _get_endpoint_neighborhood_adaptive(endpoint, contour_points, edge_percentage):
     """Get neighborhood points around an endpoint using adaptive edge_percentage."""
     # Find the closest contour point to the endpoint
     distances = np.linalg.norm(contour_points - endpoint, axis=1)
@@ -308,7 +308,7 @@ def get_endpoint_neighborhood_adaptive(endpoint, contour_points, edge_percentage
     return neighborhood
 
 
-def fit_rectangle_to_points(points):
+def _fit_rectangle_to_points(points):
     """Fit a minimum area rectangle to a set of points"""
     if len(points) < 3:
         raise ValueError(
@@ -317,7 +317,7 @@ def fit_rectangle_to_points(points):
 
     try:
         # Apply PCA to get principal axes
-        mu, v1, v2, _ = apply_pca(points)
+        mu, v1, v2, _ = _apply_pca(points)
     except Exception as e:
         raise ValueError(f"PCA failed for rectangle fitting: {e}")
 
@@ -353,7 +353,7 @@ def fit_rectangle_to_points(points):
     return corners
 
 
-def validate_and_clean_centerline(centerline, mask, n_points):
+def _validate_and_clean_centerline(centerline, mask, n_points):
     """Remove centerline points that fall outside the mask and redistribute evenly"""
     valid_points = []
 
@@ -370,7 +370,7 @@ def validate_and_clean_centerline(centerline, mask, n_points):
 
     # Redistribute points evenly along the cleaned centerline
     if len(valid_points) != n_points:
-        x_clean, y_clean = distribute_points(
+        x_clean, y_clean = _distribute_points(
             valid_points[:, 0], valid_points[:, 1], n_points
         )
         redistributed_centerline = np.column_stack((x_clean, y_clean))
@@ -379,7 +379,7 @@ def validate_and_clean_centerline(centerline, mask, n_points):
     return valid_points
 
 
-def visualize_centerline_extraction(mask, start_rectangle, end_rectangle, centerline):
+def _visualize_centerline_extraction(mask, start_rectangle, end_rectangle, centerline):
     """Visualize the centerline extraction process"""
     import matplotlib.pyplot as plt
 
@@ -471,9 +471,25 @@ def skeletonize_plus_from_contour(
     Returns:
         Centerline as numpy array of shape (n_points, 2)
     """
+    # Validate and set edge_percentage if provided
+    if edge_percentage is not None:
+        # Ensure edge_percentage is within valid range (1% to 50%)
+        if not (0.01 <= edge_percentage <= 0.5):
+            raise ValueError(
+                f"edge_percentage must be between 0.01 (1%) and 0.5 (50%), got {edge_percentage}"
+            )
+
+    # Validate and set n_points if provided
+    if n_points is not None:
+        # Ensure n_points is within valid range
+        if not (10 <= n_points <= 1000):
+            raise ValueError(
+                f"n_points must be between 10 and 1000, got {n_points}"
+            )
+
     # Calculate adaptive parameters if not provided
     if edge_percentage is None or n_points is None:
-        edge_percentage_, n_points_ = calculate_adaptive_parameters(contour, mask)
+        edge_percentage_, n_points_ = _calculate_adaptive_parameters(contour, mask)
         if edge_percentage is None:
             edge_percentage = edge_percentage_
         if n_points is None:
@@ -482,32 +498,32 @@ def skeletonize_plus_from_contour(
     # Distribute points uniformly along contour
     contour_points = contour.reshape(-1, 2)
     x_sorted, y_sorted = contour_points[:, 0], contour_points[:, 1]
-    x_uniform, y_uniform = distribute_points(x_sorted, y_sorted, len(contour))
+    x_uniform, y_uniform = _distribute_points(x_sorted, y_sorted, len(contour))
     uniform_contour = np.column_stack((x_uniform, y_uniform))
 
     # Find rod endpoints using skeletonization
-    start_endpoint, end_endpoint, skeleton = find_endpoints_with_skeleton(mask)
+    start_endpoint, end_endpoint, _ = _find_endpoints_with_skeleton(mask)
 
     if start_endpoint is None or end_endpoint is None:
         raise ValueError("Could not find skeleton endpoints")
 
     # Create neighborhoods around the endpoints using adaptive edge_percentage
-    start_edge_points = get_endpoint_neighborhood_adaptive(
+    start_edge_points = _get_endpoint_neighborhood_adaptive(
         start_endpoint, uniform_contour, edge_percentage
     )
-    end_edge_points = get_endpoint_neighborhood_adaptive(
+    end_edge_points = _get_endpoint_neighborhood_adaptive(
         end_endpoint, uniform_contour, edge_percentage
     )
 
     # Fit rectangles to both edge point sets
-    start_rectangle = fit_rectangle_to_points(start_edge_points)
-    end_rectangle = fit_rectangle_to_points(end_edge_points)
+    start_rectangle = _fit_rectangle_to_points(start_edge_points)
+    end_rectangle = _fit_rectangle_to_points(end_edge_points)
 
     # Get the contour intercepts for both rectangles
-    start_extreme = get_contour_intercept_with_rectangle_axis(
+    start_extreme = _get_contour_intercept_with_rectangle_axis(
         start_rectangle, start_endpoint, uniform_contour
     )
-    end_extreme = get_contour_intercept_with_rectangle_axis(
+    end_extreme = _get_contour_intercept_with_rectangle_axis(
         end_rectangle, end_endpoint, uniform_contour
     )
 
@@ -534,7 +550,7 @@ def skeletonize_plus_from_contour(
 
         # Redistribute n_points along this segment
         if len(segment) > 1:
-            x_seg, y_seg = distribute_points(segment[:, 0], segment[:, 1], n_points)
+            x_seg, y_seg = _distribute_points(segment[:, 0], segment[:, 1], n_points)
             redistributed_segment = np.column_stack((x_seg, y_seg))
 
             # Reverse the second segment to match orientation
@@ -549,11 +565,15 @@ def skeletonize_plus_from_contour(
         centerline = (segment1 + segment2) / 2
 
         # Clean and redistribute the centerline
-        centerline = validate_and_clean_centerline(centerline, mask, n_points)
+        centerline = _validate_and_clean_centerline(centerline, mask, n_points)
+
+        # Ensure points are ordered from left to right
+        if centerline[0, 0] > centerline[-1, 0]:
+            centerline = centerline[::-1]
 
         # Visualize if requested
         if plot:
-            visualize_centerline_extraction(
+            _visualize_centerline_extraction(
                 mask, start_rectangle, end_rectangle, centerline
             )
 

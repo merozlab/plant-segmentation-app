@@ -318,7 +318,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                 <span className="text-gray-400 text-sm">Morphological skeleton extraction using scikit-image</span>
               </div>
             </label>
-            <label className="flex items-center gap-3 cursor-pointer opacity-50">
+            <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="radio"
                 name="centerlineAlgorithm"
@@ -329,11 +329,8 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
                 disabled={isLoading}
               />
               <div className="flex flex-col">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-300 font-medium">Edge PCA</span>
-                  <span className="px-2 py-1 text-xs bg-gray-600 text-white rounded-full">DEPRECATED</span>
-                </div>
-                <span className="text-gray-500 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
+                <span className="text-white font-medium">Edge PCA</span>
+                <span className="text-gray-400 text-sm">Finds edge points using PCA on each side, traces the contour from edge points and averages</span>
               </div>
             </label>
           </div>
