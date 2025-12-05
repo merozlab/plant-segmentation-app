@@ -292,6 +292,71 @@ def set_model_size() -> Response:
         return make_response({"error": str(e)}, 500)
 
 
+@app.route("/presets", methods=["GET"])
+def get_presets() -> Response:
+    """Get all available preset configurations with memory estimates"""
+    try:
+        from resolution_config import get_all_presets, get_memory_per_frame, get_max_frames
+        import torch
+
+        presets = get_all_presets()
+
+        # Add memory estimates if GPU available
+        if torch.cuda.is_available():
+            total_memory = torch.cuda.get_device_properties(0).total_memory
+            available_memory_mb = (total_memory - torch.cuda.memory_reserved(0)) // 1024**2
+
+            for preset_name, config in presets.items():
+                model_size = config["model_size"]
+                resolution = config["resolution"]
+
+                memory_per_frame = get_memory_per_frame(model_size, resolution)
+                max_frames = get_max_frames(model_size, resolution, available_memory_mb)
+
+                config["memory_per_frame_mb"] = round(memory_per_frame, 2)
+                config["estimated_max_frames"] = max_frames
+
+        return make_response(json.dumps(presets), 200, {"Content-Type": "application/json"})
+
+    except Exception as e:
+        logger.error(f"Error getting presets: {e}")
+        return make_response(json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"})
+
+
+@app.route("/set_preset", methods=["POST"])
+def set_preset() -> Response:
+    """Set model configuration using a preset"""
+    try:
+        from resolution_config import get_preset_config
+
+        data = request.json
+        preset_name = data.get("preset")
+
+        if not preset_name:
+            return make_response(json.dumps({"error": "preset parameter required"}), 400, {"Content-Type": "application/json"})
+
+        config = get_preset_config(preset_name)
+        if not config:
+            return make_response(json.dumps({"error": f"Invalid preset: {preset_name}"}), 400, {"Content-Type": "application/json"})
+
+        # Update app configuration
+        import app_conf
+        app_conf.MODEL_SIZE = config["model_size"]
+        app_conf.MODEL_RESOLUTION = config["resolution"]
+
+        return make_response(json.dumps({
+            "status": "success",
+            "preset": preset_name,
+            "model_size": config["model_size"],
+            "resolution": config["resolution"],
+            "message": "Preset applied. Please refresh the page for changes to take effect."
+        }), 200, {"Content-Type": "application/json"})
+
+    except Exception as e:
+        logger.error(f"Error setting preset: {e}")
+        return make_response(json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"})
+
+
 def gen_track_with_mask_stream(
     boundary: str,
     session_id: str,

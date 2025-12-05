@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import {uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom, selectedResolutionAtom} from '@/demo/atoms';
+import {uploadConfirmationModalAtom, sessionAtom, uploadingStateAtom, frameIndexAtom, uploadedVideoDataAtom, selectedResolutionAtom, selectedPresetAtom} from '@/demo/atoms';
 import {spacing} from '@/theme/tokens.stylex';
 import {Close, Rotate, RotateClockwise} from '@carbon/icons-react';
 import stylex from '@stylexjs/stylex';
@@ -238,6 +238,7 @@ export default function DemoVideoGalleryModal({}: Props) {
   const [isOpen, setIsOpen] = useAtom(uploadConfirmationModalAtom);
   const [videoData, setVideoData] = useAtom(uploadedVideoDataAtom);
   const [selectedResolution] = useAtom(selectedResolutionAtom);
+  const [selectedPreset] = useAtom(selectedPresetAtom);
   const navigate = useNavigate();
   const setFrameIndex = useSetAtom(frameIndexAtom);
   const setUploadingState = useSetAtom(uploadingStateAtom);
@@ -401,6 +402,10 @@ export default function DemoVideoGalleryModal({}: Props) {
           <div {...stylex.props(styles.header)}>
             <div {...stylex.props(styles.title)}>
               Crop and adjust your video
+              <div style={{ fontSize: '0.875rem', marginTop: '8px', opacity: 0.8, fontWeight: 'normal' }}>
+                Model Resolution: {selectedResolution}px
+                {selectedPreset && ` (${selectedPreset.charAt(0).toUpperCase() + selectedPreset.slice(1)} preset)`}
+              </div>
             </div>
           </div>
           
@@ -433,10 +438,16 @@ export default function DemoVideoGalleryModal({}: Props) {
               
               {/* Crop size indicator */}
               <div {...stylex.props(styles.cropIndicator)} style={{ color: cropInfo.color }}>
-                <div>{cropInfo.width}×{cropInfo.height}px</div>
+                <div>Crop: {cropInfo.width}×{cropInfo.height}px</div>
                 {cropInfo.willResize && (
                   <div style={{ fontSize: '0.75rem', marginTop: '2px', opacity: 0.9 }}>
-                    Will be resized to {cropInfo.resizedWidth}×{cropInfo.resizedHeight}
+                    ⚠️ Will resize to {cropInfo.resizedWidth}×{cropInfo.resizedHeight}
+                    <div style={{ marginTop: '2px' }}>Model limit: {selectedResolution}px</div>
+                  </div>
+                )}
+                {!cropInfo.willResize && (
+                  <div style={{ fontSize: '0.75rem', marginTop: '2px', opacity: 0.9, color: '#44ff44' }}>
+                    ✓ No resize needed (within {selectedResolution}px)
                   </div>
                 )}
               </div>

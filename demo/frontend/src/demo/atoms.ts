@@ -268,7 +268,9 @@ export const erodeBorderAtom = atom<boolean>(true);
 // Resolution Settings
 // #####################
 
-export const currentResolutionAtom = atom<number>(1024);
-export const selectedModelAtom = atom<string>('small');
-export const selectedResolutionAtom = atom<number>(1024);
+export const currentResolutionAtom = atom<number>(2048);
+export const selectedModelAtom = atom<string>('large');
+export const selectedResolutionAtom = atom<number>(2048);
 export const updateStatusAtom = atom<string>('');
+export const selectedPresetAtom = atom<string>('high_quality');
+export const usePresetsAtom = atom<boolean>(true);

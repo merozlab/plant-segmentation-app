@@ -16,7 +16,7 @@
 import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
 import DemoVideoGallery from '@/common/components/gallery/DemoVideoGallery';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
-import AdvancedSettings from '@/common/components/settings/AdvancedSettings';
+import ModelPresetSelector from '@/common/components/settings/ModelPresetSelector';
 import { useEffect, useRef } from 'react';
 import PointsImportExport from './PointsImportExport';
 
@@ -33,7 +33,7 @@ export default function FirstClickView() {
 
   return (
       <div className="flex-1 flex flex-col gap-3 overflow-y-auto min-h-0 px-8">
-        <AdvancedSettings />
+        <ModelPresetSelector />
         <PointsImportExport />
         <DefaultVideoGalleryModalTrigger />
         <DemoVideoGallery />

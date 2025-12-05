@@ -54,6 +54,31 @@ BASE_MEMORY_REQUIREMENTS = {
 # Approximate GPU memory needed for different resolutions (in MB)
 GPU_MEMORY_BASELINE = 2000  # Base GPU memory overhead
 
+# Preset configurations combining model size and resolution
+PRESET_CONFIGS = {
+    "fast": {
+        "model_size": "small",
+        "resolution": 512,
+        "name": "Fast",
+        "description": "Quick processing, best for previews and long videos",
+        "technical_detail": "Small model @ 512px"
+    },
+    "balanced": {
+        "model_size": "base_plus",
+        "resolution": 1536,
+        "name": "Balanced",
+        "description": "High quality with good performance, great for longer videos",
+        "technical_detail": "Base Plus model @ 1536px"
+    },
+    "high_quality": {
+        "model_size": "large",
+        "resolution": 2048,
+        "name": "High Quality (Recommended)",
+        "description": "Maximum accuracy and detail preservation, optimized for RTX 3080/5090",
+        "technical_detail": "Large model @ 2048px"
+    }
+}
+
 
 def get_model_resolutions(model_size: str) -> List[int]:
     """Get supported resolutions for a model size."""
@@ -101,15 +126,18 @@ def get_config_path(model_size: str, resolution: int) -> str:
     # Map model size to config file prefix
     config_prefixes = {
         "tiny": "sam2.1_hiera_t",
-        "small": "sam2.1_hiera_s", 
+        "small": "sam2.1_hiera_s",
         "base_plus": "sam2.1_hiera_b+",
         "large": "sam2.1_hiera_l"
     }
-    
+
     prefix = config_prefixes.get(model_size, "sam2.1_hiera_s")
-    
+
+    # Special case for small @ 512
+    if model_size == "small" and resolution == 512:
+        return f"configs/sam2.1/{prefix}_512.yaml"
     # For non-standard resolutions, use resolution-specific config
-    if resolution != 1024:
+    elif resolution != 1024:
         return f"configs/sam2.1/{prefix}_{resolution}.yaml"
     else:
         return f"configs/sam2.1/{prefix}.yaml"
@@ -170,13 +198,23 @@ def get_resolution_from_env() -> Optional[int]:
 def get_optimal_resolution(model_size: str, available_memory_mb: int = 10000) -> int:
     """Get optimal resolution based on model size and available memory."""
     supported_resolutions = get_model_resolutions(model_size)
-    
+
     # Try resolutions from highest to lowest
     for resolution in sorted(supported_resolutions, reverse=True):
         estimated_frames = get_max_frames(model_size, resolution, available_memory_mb)
         # If we can process at least 50 frames, this resolution is viable
         if estimated_frames >= 50:
             return resolution
-    
+
     # Fall back to minimum resolution
     return min(supported_resolutions)
+
+
+def get_preset_config(preset_name: str) -> Optional[Dict]:
+    """Get configuration for a preset."""
+    return PRESET_CONFIGS.get(preset_name, PRESET_CONFIGS["balanced"])
+
+
+def get_all_presets() -> Dict[str, Dict]:
+    """Get all available preset configurations."""
+    return PRESET_CONFIGS
