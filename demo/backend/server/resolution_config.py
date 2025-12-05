@@ -12,40 +12,33 @@ import os
 from typing import Dict, List, Tuple, Optional
 
 # Resolution configurations for each model size
+# Only configurations used by the 3 presets: Fast (small@1024), Balanced (base_plus@1536), High Quality (large@2048)
 RESOLUTION_CONFIGS = {
-    "tiny": {
-        "resolutions": [512, 1024],
-        "default_resolution": 512,
-        "max_resolution": 1024,
-        "memory_multiplier": 1.0,  # Base memory usage
-        "description": "Fastest processing, good for basic tasks"
-    },
     "small": {
-        "resolutions": [512, 1024],
+        "resolutions": [1024],
         "default_resolution": 1024,
         "max_resolution": 1024,
         "memory_multiplier": 1.5,
-        "description": "Balanced performance, recommended for most tasks"
+        "description": "Fast processing with good quality"
     },
     "base_plus": {
-        "resolutions": [1024, 1536],
-        "default_resolution": 1024,
+        "resolutions": [1536],
+        "default_resolution": 1536,
         "max_resolution": 1536,
         "memory_multiplier": 2.5,
-        "description": "Higher quality, good for detailed work"
+        "description": "High quality with good performance"
     },
     "large": {
-        "resolutions": [1024, 1536, 2048],
-        "default_resolution": 1024,
+        "resolutions": [2048],
+        "default_resolution": 2048,
         "max_resolution": 2048,
         "memory_multiplier": 4.0,
-        "description": "Highest quality, best for precision tasks"
+        "description": "Highest quality, optimized for RTX 3080/5090"
     }
 }
 
 # Base memory requirements per frame (in MB) at 1024x1024 resolution
 BASE_MEMORY_REQUIREMENTS = {
-    "tiny": 1.5,
     "small": 2.5,
     "base_plus": 4.0,
     "large": 6.0
@@ -58,10 +51,10 @@ GPU_MEMORY_BASELINE = 2000  # Base GPU memory overhead
 PRESET_CONFIGS = {
     "fast": {
         "model_size": "small",
-        "resolution": 512,
+        "resolution": 1024,
         "name": "Fast",
-        "description": "Quick processing, best for previews and long videos",
-        "technical_detail": "Small model @ 512px"
+        "description": "Quick processing with good quality, great for most videos",
+        "technical_detail": "Small model @ 1024px"
     },
     "balanced": {
         "model_size": "base_plus",
@@ -123,36 +116,30 @@ def get_max_frames(model_size: str, resolution: int, available_memory_mb: int = 
 
 def get_config_path(model_size: str, resolution: int) -> str:
     """Get the config file path for a given model size and resolution."""
-    # Map model size to config file prefix
-    config_prefixes = {
-        "tiny": "sam2.1_hiera_t",
-        "small": "sam2.1_hiera_s",
-        "base_plus": "sam2.1_hiera_b+",
-        "large": "sam2.1_hiera_l"
+    # Map model size and resolution to config files for the 3 presets
+    config_map = {
+        ("small", 1024): "configs/sam2.1/sam2.1_hiera_s.yaml",
+        ("base_plus", 1536): "configs/sam2.1/sam2.1_hiera_b+_1536.yaml",
+        ("large", 2048): "configs/sam2.1/sam2.1_hiera_l_2048.yaml",
     }
 
-    prefix = config_prefixes.get(model_size, "sam2.1_hiera_s")
+    config_path = config_map.get((model_size, resolution))
+    if config_path:
+        return config_path
 
-    # Special case for small @ 512
-    if model_size == "small" and resolution == 512:
-        return f"configs/sam2.1/{prefix}_512.yaml"
-    # For non-standard resolutions, use resolution-specific config
-    elif resolution != 1024:
-        return f"configs/sam2.1/{prefix}_{resolution}.yaml"
-    else:
-        return f"configs/sam2.1/{prefix}.yaml"
+    # Fallback (should not happen with preset system)
+    return "configs/sam2.1/sam2.1_hiera_l_2048.yaml"
 
 
 def get_checkpoint_path(model_size: str) -> str:
     """Get checkpoint file path for a model size."""
     checkpoint_map = {
-        "tiny": "sam2.1_hiera_tiny.pt",
         "small": "sam2.1_hiera_small.pt",
-        "base_plus": "sam2.1_hiera_base_plus.pt", 
+        "base_plus": "sam2.1_hiera_base_plus.pt",
         "large": "sam2.1_hiera_large.pt"
     }
-    
-    return checkpoint_map.get(model_size, "sam2.1_hiera_small.pt")
+
+    return checkpoint_map.get(model_size, "sam2.1_hiera_large.pt")
 
 
 def validate_resolution(model_size: str, resolution: int) -> bool:
