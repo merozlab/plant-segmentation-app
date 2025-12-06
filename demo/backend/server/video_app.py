@@ -130,11 +130,15 @@ def send_poster_image(path: str) -> Response:
 @app.route(f"/{UPLOADS_PREFIX}/<path:path>", methods=["GET"])
 def send_uploaded_video(path: str):
     try:
+        print(f"Attempting to serve file: {path} from {UPLOADS_PATH}")
+        full_path = UPLOADS_PATH / path
+        print(f"Full path: {full_path}, exists: {full_path.exists()}")
         return send_from_directory(
             UPLOADS_PATH,
             path,
         )
-    except:
+    except Exception as e:
+        print(f"Error serving file {path}: {e}")
         raise ValueError("resource not found")
 
 
@@ -585,9 +589,13 @@ PROCESSING_STATUS: Dict[str, Dict[str, Any]] = {}
 
 @app.route("/api/video_status/<video_id>", methods=["GET"])
 def video_status(video_id):
+    print(f"Checking status for video_id: {video_id}")
+    print(f"Available keys in PROCESSING_STATUS: {list(PROCESSING_STATUS.keys())}")
     status = PROCESSING_STATUS.get(video_id, None)
     if status is None:
+        print(f"Video {video_id} not found in PROCESSING_STATUS")
         return make_response("Video not found", 404)
+    print(f"Found status for {video_id}: {status}")
     if status["status"] == "ready":
         # Return video data
         return {"status": "ready", "video": status["video"]}
@@ -613,9 +621,32 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
     image_files = []
     print(f"Processing folder: {upload_dir}", "video_id:", video_id)
 
+    # Keep track of the original upload_dir for saving the video
+    original_upload_dir = upload_dir
+    images_dir = upload_dir
+
+    # First, try to find images in the root directory
     for ext in image_extensions:
         image_files += list((upload_dir).glob(f"*{ext}"))
         image_files += list((upload_dir).glob(f"*{ext.upper()}"))
+
+    # If no images found in root, check if there's exactly one subfolder
+    if not image_files:
+        subfolders = [d for d in upload_dir.iterdir() if d.is_dir()]
+
+        # If there's exactly one subfolder, search for images in it
+        if len(subfolders) == 1:
+            subfolder = subfolders[0]
+            print(f"No images in root folder. Searching in subfolder: {subfolder}")
+
+            for ext in image_extensions:
+                image_files += list(subfolder.glob(f"*{ext}"))
+                image_files += list(subfolder.glob(f"*{ext.upper()}"))
+
+            # Update images_dir to point to the subfolder for subsequent operations
+            if image_files:
+                images_dir = subfolder
+                print(f"Found {len(image_files)} images in subfolder: {subfolder}")
 
     if not image_files:
         raise ValueError(
@@ -625,13 +656,13 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
     print(f"Found {len(image_files)} images in the extracted folder")
 
     # Create a text file listing all image files in their correct order
-    filelist_path = upload_dir / "filelist.txt"
+    filelist_path = images_dir / "filelist.txt"
     with open(filelist_path, "w") as f:
         for img_path in sorted(image_files):
             # Write the format expected by ffmpeg: file '/path/to/image.jpg'
             f.write(f"file '{img_path.absolute()}'\n")
     try:
-        video_path = str(upload_dir.parent / f"{video_id}.mp4")
+        video_path = str(original_upload_dir.parent / f"{video_id}.mp4")
         ext = image_files[0].suffix
 
         ffmpeg_cmd = [
@@ -679,11 +710,13 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
             "video": {
                 "id": f"{video_id}",
                 "url": f"/uploads/{video_id}.mp4",
-                "original_folder": str(upload_dir),
+                "original_folder": str(images_dir),
             },
         }
 
         print(f"Video {video_id} processed successfully. Saved to {video_path}")
+        print(f"PROCESSING_STATUS[{video_id}] = {PROCESSING_STATUS[video_id]}")
+        print(f"All PROCESSING_STATUS keys: {list(PROCESSING_STATUS.keys())}")
     except Exception as e:
         PROCESSING_STATUS[video_id] = {
             "status": "error",
@@ -708,10 +741,10 @@ def upload_zip():
 
     timeint = int(time.time())
     zip_name = f"{Path(file.filename).stem}_{timeint}"
-    video_id = f"zip_{zip_name}_{timeint}"
+    video_id = f"zip_{zip_name}"
     upload_dir = UPLOADS_PATH / zip_name
     upload_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = upload_dir / zip_name
+    zip_path = upload_dir / f"{zip_name}.zip"
     file.save(zip_path)
     PROCESSING_STATUS[video_id] = {"status": "processing"}
     threading.Thread(

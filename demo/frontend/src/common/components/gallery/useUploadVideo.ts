@@ -26,7 +26,7 @@ import {
   MAX_VIDEO_UPLOAD_SIZE,
   MAX_ZIP_UPLOAD_SIZE
 } from '@/demo/DemoConfig'; // Import the constants
-import { originalFilePathAtom, uploadErrorMessageAtom } from '@/demo/atoms';
+import { originalFilePathAtom, originalFilenameAtom, uploadErrorMessageAtom } from '@/demo/atoms';
 import { useState } from 'react';
 
 
@@ -123,6 +123,7 @@ export default function useUploadVideo({
   // const originalFilePath = useAtomValue(originalFilePathAtom);
   const [, setErrorMessage] = useAtom(uploadErrorMessageAtom); // We only need the setter here
   const [originalFilePath, setOriginalFilePath] = useAtom(originalFilePathAtom);
+  const [, setOriginalFilename] = useAtom(originalFilenameAtom);
   const [isProcessingFolder, setIsProcessingFolder] = useState<boolean>(false);
   const [folderPath, setFolderPath] = useState<string>('');
 
@@ -172,6 +173,10 @@ export default function useUploadVideo({
       }
 
       const videoId = data.id;
+
+      // Extract folder name as filename (get last part of path)
+      const folderName = folderPath.split(/[/\\]/).filter(Boolean).pop() || 'local_folder';
+      setOriginalFilename(folderName);
 
       // Poll for completion
       let pollAttempts = 0;
@@ -305,6 +310,7 @@ export default function useUploadVideo({
 
       onUploadStart?.();
       const file = acceptedFiles[0];
+
       const isZip = file.type === 'application/zip' || file.name.endsWith('.zip');
       const maxSize = isZip ? MAX_ZIP_UPLOAD_SIZE : MAX_VIDEO_UPLOAD_SIZE;
 
@@ -342,6 +348,10 @@ export default function useUploadVideo({
             return;
           }
           videoId = data.id;
+
+          // Extract and store the original filename (without extension) from the zip filename
+          const filenameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+          setOriginalFilename(filenameWithoutExt);
         } catch (e) {
           const errorMsg = e instanceof Error ? e.message : 'Failed to upload zip';
           const userFriendlyMessage = getVideoErrorMessage(errorMsg);
@@ -443,6 +453,10 @@ export default function useUploadVideo({
       }
 
       // Not a zip file, upload as normal
+      // Extract and store the original filename (without extension)
+      const filenameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+      setOriginalFilename(filenameWithoutExt);
+
       commit({
         variables: {
           file,

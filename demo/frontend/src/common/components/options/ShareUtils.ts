@@ -34,8 +34,8 @@ export async function handleSaveVideo(
   });
 }
 
-export function getFileName() {
-  const date = new Date();
-  const timestamp = date.getTime();
-  return `sam2_masked_video_${timestamp}.mp4`;
+export function getFileName(originalFilename?: string | null) {
+  const datetime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: YYYY-MM-DDTHH-MM-SS
+  const baseFilename = originalFilename || 'sam2_masked_video';
+  return `${baseFilename}_${datetime}.mp4`;
 }

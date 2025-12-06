@@ -23,7 +23,7 @@ import {
   DOWNLOAD_TOOLBAR_INDEX,
   OBJECT_TOOLBAR_INDEX,
 } from '@/common/components/toolbar/ToolbarConfig';
-import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, centerlineAlgorithmAtom, centerlinePointsAtom, centerlineUnitsAtom, pixelsToMetersRatioAtom, centerlineEdgePercentageAtom } from '@/demo/atoms';
+import { sessionAtom, trackletObjectsAtom, centerlinesAtom, originalFilePathAtom, originalFilenameAtom, centerlineAlgorithmAtom, centerlinePointsAtom, centerlineUnitsAtom, pixelsToMetersRatioAtom, centerlineEdgePercentageAtom } from '@/demo/atoms';
 import { useAtomValue, useAtom, useSetAtom } from 'jotai';
 // import useVideo from '@/common/components/video/editor/useVideo';
 import ToolbarHeaderWrapper from '@/common/components/toolbar/ToolbarHeaderWrapper';
@@ -41,6 +41,7 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
   const session = useAtomValue(sessionAtom);
   const trackletObjects = useAtomValue(trackletObjectsAtom);
   const originalFilePath = useAtomValue(originalFilePathAtom);
+  const originalFilename = useAtomValue(originalFilenameAtom);
   const pixelsToMetersRatio = useAtomValue(pixelsToMetersRatioAtom);
   const setCenterlinesMap = useSetAtom(centerlinesAtom);
   const [centerlineAlgorithm, setCenterlineAlgorithm] = useAtom(centerlineAlgorithmAtom);
@@ -229,10 +230,13 @@ export default function CenterlineToolbar({ onTabChange }: Props) {
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
-        // Use appropriate filename based on units
-        const filename = centerlineUnits === 'meters'
-          ? `${session.id}_centerlines_meters.zip`
-          : `${session.id}_centerlines.zip`;
+
+        // Generate filename with format: {filename}_{datetime}_centerlines[_meters].zip
+        const datetime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: YYYY-MM-DDTHH-MM-SS
+        const baseFilename = originalFilename || session.id; // Fallback to sessionId if no original filename
+        const unitsLabel = centerlineUnits === 'meters' ? '_meters' : '';
+        const filename = `${baseFilename}_${datetime}_centerlines${unitsLabel}.zip`;
+
         a.download = filename;
         document.body.appendChild(a);
         a.click();

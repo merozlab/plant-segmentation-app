@@ -23,7 +23,7 @@ import useVideo from '@/common/components/video/editor/useVideo';
 import { MP4ArrayBuffer } from 'mp4box';
 import { useState } from 'react';
 import { atom, useAtom, useAtomValue } from 'jotai'; // Import useAtomValue
-import { sessionAtom, erodeBorderAtom } from '@/demo/atoms'; // Import sessionAtom and erodeBorderAtom
+import { sessionAtom, erodeBorderAtom, originalFilenameAtom } from '@/demo/atoms'; // Import sessionAtom and erodeBorderAtom
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig'; // Import the constant
 
 type DownloadingState = 'default' | 'started' | 'encoding' | 'completed';
@@ -51,6 +51,7 @@ export default function useDownloadVideo(): State {
   const { enqueueMessage, clearMessage } = useMessagesSnackbar();
   const session = useAtomValue(sessionAtom); // Get session state
   const erodeBorder = useAtomValue(erodeBorderAtom); // Get erode border state
+  const originalFilename = useAtomValue(originalFilenameAtom); // Get original filename
 
   const video = useVideo();
 
@@ -99,7 +100,7 @@ export default function useDownloadVideo(): State {
         const file = event.file;
 
         if (shouldSave) {
-          saveVideo(file, getFileName());
+          saveVideo(file, getFileName(originalFilename));
           video?.removeEventListener('encodingCompleted', onEncodingComplete);
           video?.removeEventListener('encodingStateUpdate', onEncodingStateUpdate);
           setDownloadingState('completed');
@@ -216,8 +217,11 @@ export default function useDownloadVideo(): State {
       const a = document.createElement('a');
       document.body.appendChild(a);
       a.href = zipUrl;
-      // Use session ID for the filename, matching backend logic
-      a.download = `${sessionId}_masks.zip`;
+
+      // Generate filename with format: {filename}_{datetime}_masks.zip
+      const datetime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: YYYY-MM-DDTHH-MM-SS
+      const baseFilename = originalFilename || sessionId; // Fallback to sessionId if no original filename
+      a.download = `${baseFilename}_${datetime}_masks.zip`;
       a.click();
 
       setProgress(100);
