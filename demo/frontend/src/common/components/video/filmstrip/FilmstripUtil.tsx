@@ -45,10 +45,8 @@ export function drawFilmstrip(
   );
 }
 
-export function getTimeFromFrame(frame: number, fps: number): string {
-  const seconds = Math.floor(frame / fps);
-  const frameRemaining = frame - fps * seconds;
-  return `${seconds}:${frameRemaining.toFixed().toString().padStart(2, '0')}`;
+export function getTimeFromFrame(frame: number): string {
+  return `Frame ${frame}`;
 }
 
 export function drawMarker(
@@ -57,7 +55,6 @@ export function drawMarker(
   selectedFrameHelper: SelectedFrameHelper,
   pointerPosition: Pt | null,
   scanLabel: string | false,
-  fps: number,
 ) {
   if (space == undefined || form?.ctx == undefined) {
     return;
@@ -92,7 +89,7 @@ export function drawMarker(
     );
 
   // draw text
-  const frameLabel = getTimeFromFrame(selectedFrameHelper.index, fps);
+  const frameLabel = getTimeFromFrame(selectedFrameHelper.index);
   form
     .font(new Font(12, 'monospace'))
     .fillOnly('#fff')

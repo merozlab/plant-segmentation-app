@@ -163,7 +163,6 @@ export default function VideoFilmstrip() {
       fpsRef.current !== null &&
       getTimeFromFrame(
         computeFrame(pointerPositionRef.current.x / space.width)?.index ?? 0,
-        fpsRef.current,
       );
 
     drawMarker(
@@ -172,7 +171,6 @@ export default function VideoFilmstrip() {
       selectedFrameHelper,
       pointerPositionRef.current,
       scanLabel,
-      fpsRef.current,
     );
   }, [computeFrame, selectedFrameHelper]);
 
