@@ -20,7 +20,8 @@ import useScreenSize from '@/common/screen/useScreenSize';
 import { uploadingStateAtom, uploadErrorMessageAtom, uploadConfirmationModalAtom, uploadedVideoDataAtom } from '@/demo/atoms';
 import { Close, CloudUpload } from '@carbon/icons-react';
 import { useSetAtom } from 'jotai';
-import { MAX_FILE_SIZE_IN_MB } from '@/demo/DemoConfig';
+import { MAX_FILE_SIZE_IN_MB, VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
+import { useEffect, useState } from 'react';
 
 
 export default function DefaultVideoGalleryModalTrigger() {
@@ -29,6 +30,24 @@ export default function DefaultVideoGalleryModalTrigger() {
   const setUploadErrorMessage = useSetAtom(uploadErrorMessageAtom);
   const setUploadConfirmationModal = useSetAtom(uploadConfirmationModalAtom);
   const setUploadedVideoData = useSetAtom(uploadedVideoDataAtom);
+  const [availableFolders, setAvailableFolders] = useState<string[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('');
+
+  // Fetch available folders on mount
+  useEffect(() => {
+    const fetchFolders = async () => {
+      try {
+        const response = await fetch(`${VIDEO_API_ENDPOINT}/list_local_folders`);
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableFolders(data.folders || []);
+        }
+      } catch (error) {
+        Logger.error('Failed to fetch folders:', error);
+      }
+    };
+    fetchFolders();
+  }, []);
 
   const handleUpload = (videoData: any) => {
     // Store the raw video data and show crop modal immediately (before processing)
@@ -42,6 +61,8 @@ export default function DefaultVideoGalleryModalTrigger() {
     getInputProps,
     isUploading,
     error,
+    processLocalFolder: processLocalFolderOriginal,
+    isProcessingFolder
   } = useUploadVideo({
     onUpload: handleUpload,
     onUploadError: (error: Error) => {
@@ -54,8 +75,18 @@ export default function DefaultVideoGalleryModalTrigger() {
     setGlobalErrorMessage: setUploadErrorMessage,
   });
 
+  // Wrapper to process selected folder
+  const processSelectedFolder = () => {
+    if (!selectedFolder) {
+      setUploadErrorMessage('Please select a folder');
+      return;
+    }
+    // Just use the folder name directly - sap_upload is already in the Docker mount path
+    processLocalFolderOriginal(selectedFolder);
+  };
+
   return (
-    <div className="flex flex-col gap-2 mb-4 mt-8">
+    <div className="flex flex-col gap-4 mb-4 mt-8">
       <div className="cursor-pointer flex flex-col gap-4" {...getRootProps()}>
         <input {...getInputProps()} />
         <OptionButton
@@ -65,16 +96,16 @@ export default function DefaultVideoGalleryModalTrigger() {
               'Upload Error'
             ) : isMobile ? (
               <>
-                Upload video or ZIP of images{' '}
+                Upload video or ZIP{' '}
                 <div className="text-xs opacity-70">
                   24fps MP4 or ZIP of images (max {MAX_FILE_SIZE_IN_MB}MB)
                 </div>
               </>
             ) : (
               <>
-                Upload video or ZIP of images{' '}
+                Upload video or ZIP{' '}
                 <div className="text-xs opacity-70">
-                  24fps MP4 or ZIP of images (max {MAX_FILE_SIZE_IN_MB}MB)
+                  Click to select: 24fps MP4 or ZIP of images (max {MAX_FILE_SIZE_IN_MB}MB)
                 </div>
               </>
             )
@@ -83,6 +114,38 @@ export default function DefaultVideoGalleryModalTrigger() {
           loadingProps={{ loading: isUploading, label: 'Uploading...' }}
           onClick={() => { }}
         />
+      </div>
+      
+      {/* Folder selection dropdown */}
+      <div className="flex flex-col gap-2">
+        <div className="text-sm opacity-70 font-medium">Or select a local folder:</div>
+        <div className="flex gap-2">
+          <select
+            value={selectedFolder}
+            onChange={(e) => setSelectedFolder(e.target.value)}
+            className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+            disabled={isUploading || isProcessingFolder || availableFolders.length === 0}
+          >
+            <option value="">
+              {availableFolders.length === 0 ? 'No folders found' : 'Select a folder...'}
+            </option>
+            {availableFolders.map((folder) => (
+              <option key={folder} value={folder}>
+                {folder}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={processSelectedFolder}
+            disabled={isUploading || isProcessingFolder || !selectedFolder}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-white text-sm font-medium transition-colors"
+          >
+            {isProcessingFolder ? 'Processing...' : 'Process'}
+          </button>
+        </div>
+        <div className="text-xs opacity-60">
+          Folders from C:/Users/Public/sap_upload directory
+        </div>
       </div>
     </div>
   );

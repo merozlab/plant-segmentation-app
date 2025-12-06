@@ -56,6 +56,7 @@ services:
       - 7264:5000
     volumes:
       - ./demo/data/:/data/:rw
+      - /mnt/c/Users/Public/sap_upload:/data/uploads:rw
     environment:
       - SERVER_ENVIRONMENT=PROD
       - FLASK_APP=video_app

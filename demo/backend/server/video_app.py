@@ -615,24 +615,29 @@ def unzip(zip_path: Path, extract_to: Path) -> None:
     print(f"Unzipped {zip_path} to {extract_to}")
 
 
-def convert_folder_to_video_async(video_id: str, upload_dir: Path):
+def convert_folder_to_video_async(video_id: str, source_dir: Path, is_zip: bool = False):
+    """
+    Convert a folder of images to a video.
+    Args:
+        video_id: Unique identifier for the video
+        source_dir: Directory containing the images (either extracted zip or local folder)
+        is_zip: True if processing a zip file, False if processing a local folder
+    """
     # Check if the folder contains images
     image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]
     image_files = []
-    print(f"Processing folder: {upload_dir}", "video_id:", video_id)
+    print(f"Processing folder: {source_dir}", "video_id:", video_id, "is_zip:", is_zip)
 
-    # Keep track of the original upload_dir for saving the video
-    original_upload_dir = upload_dir
-    images_dir = upload_dir
+    images_dir = source_dir
 
     # First, try to find images in the root directory
     for ext in image_extensions:
-        image_files += list((upload_dir).glob(f"*{ext}"))
-        image_files += list((upload_dir).glob(f"*{ext.upper()}"))
+        image_files += list(source_dir.glob(f"*{ext}"))
+        image_files += list(source_dir.glob(f"*{ext.upper()}"))
 
     # If no images found in root, check if there's exactly one subfolder
     if not image_files:
-        subfolders = [d for d in upload_dir.iterdir() if d.is_dir()]
+        subfolders = [d for d in source_dir.iterdir() if d.is_dir()]
 
         # If there's exactly one subfolder, search for images in it
         if len(subfolders) == 1:
@@ -650,21 +655,40 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
 
     if not image_files:
         raise ValueError(
-            f"No image files found in the extracted folder. Supported formats: {', '.join(image_extensions)}"
+            f"No image files found in the folder. Supported formats: {', '.join(image_extensions)}"
         )
 
-    print(f"Found {len(image_files)} images in the extracted folder")
+    print(f"Found {len(image_files)} images")
+
+    # Sort image files
+    sorted_images = sorted(image_files)
+    
+    # Determine output location based on whether this is a zip or local folder
+    if is_zip:
+        # For zip files, create a new folder with safe name
+        output_dir = source_dir
+        video_path = str(UPLOADS_PATH / f"{video_id}.mp4")
+        # Copy original images to preserve filenames
+        original_folder = output_dir / images_dir.name
+        if not original_folder.exists():
+            original_folder.mkdir(parents=True, exist_ok=True)
+            import shutil
+            for img in sorted_images:
+                shutil.copy2(img, original_folder / img.name)
+    else:
+        # For local folders, use the folder directly and keep original structure
+        output_dir = source_dir
+        video_path = str(UPLOADS_PATH / f"{video_id}.mp4")
+        original_folder = images_dir
 
     # Create a text file listing all image files in their correct order
-    filelist_path = images_dir / "filelist.txt"
+    filelist_path = output_dir / "filelist.txt"
     with open(filelist_path, "w") as f:
-        for img_path in sorted(image_files):
+        for img_path in sorted_images:
             # Write the format expected by ffmpeg: file '/path/to/image.jpg'
             f.write(f"file '{img_path.absolute()}'\n")
+    
     try:
-        video_path = str(original_upload_dir.parent / f"{video_id}.mp4")
-        ext = image_files[0].suffix
-
         ffmpeg_cmd = [
             "ffmpeg",
             "-y",
@@ -683,24 +707,6 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
             video_path,
         ]
 
-        # ffmpeg_cmd = [
-        #     "ffmpeg",
-        #     "-y",
-        #     "-framerate",
-        #     "24",
-        #     "-pattern_type",
-        #     "glob",
-        #     "-i",
-        #     f"{upload_dir}/*{ext}",
-        #     "-c:v",
-        #     "libx264",
-        #     "-pix_fmt",
-        #     "yuv420p",
-        #     "-vf",
-        #     "scale=1280:720:force_original_aspect_ratio=decrease",
-        #     video_path,
-        # ]
-
         result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
         if result.returncode != 0:
             raise ValueError(f"FFmpeg failed: {result.stderr}")
@@ -710,7 +716,7 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
             "video": {
                 "id": f"{video_id}",
                 "url": f"/uploads/{video_id}.mp4",
-                "original_folder": str(images_dir),
+                "original_folder": str(original_folder),
             },
         }
 
@@ -727,7 +733,7 @@ def convert_folder_to_video_async(video_id: str, upload_dir: Path):
 
 def convert_zip_to_video_async(zip_path: Path, video_id: str, upload_dir: Path):
     unzip(zip_path, upload_dir)
-    convert_folder_to_video_async(video_id, upload_dir)
+    convert_folder_to_video_async(video_id, upload_dir, is_zip=True)
 
 
 @app.route("/upload_zip", methods=["POST"])
@@ -773,23 +779,37 @@ if IS_LOCAL_DEPLOYMENT:
                 f"Folder '{folder_name}' not found in uploads directory", 404
             )
 
-        # # Generate a unique ID for this processing job
+        # Generate a unique ID for this processing job
         timestamp = int(time.time())
         safe_folder_name = "".join(c if c.isalnum() else "_" for c in folder_name)[:20]
         video_id = f"local_{safe_folder_name}_{timestamp}"
-        # upload_dir = UPLOADS_PATH / video_id
-        # upload_dir.mkdir(parents=True, exist_ok=True)
 
         # Set the initial processing status
         PROCESSING_STATUS[video_id] = {"status": "processing", "folder": folder_name}
 
-        # Start processing in a separate thread
+        # Start processing in a separate thread with is_zip=False
         threading.Thread(
             target=convert_folder_to_video_async,
-            args=(video_id, folder_path),
+            args=(video_id, folder_path, False),
         ).start()
 
         return {"status": "processing", "id": video_id}
+
+    @app.route("/list_local_folders", methods=["GET"])
+    def list_local_folders():
+        """List all folders in the uploads directory
+        (only available in local deployment)"""
+        try:
+            folders = []
+            if UPLOADS_PATH.exists():
+                for item in UPLOADS_PATH.iterdir():
+                    if item.is_dir() and not item.name.startswith('.'):
+                        folders.append(item.name)
+            folders.sort()
+            return {"folders": folders}
+        except Exception as e:
+            logger.error(f"Error listing folders: {e}")
+            return make_response(f"Error listing folders: {str(e)}", 500)
 
 else:
     # When IS_LOCAL_DEPLOYMENT is false, provide a disabled endpoint that returns a clear message
@@ -797,6 +817,12 @@ else:
     def process_local_folder():
         return make_response(
             "Local folder processing is disabled in this deployment", 403
+        )
+
+    @app.route("/list_local_folders", methods=["GET"])
+    def list_local_folders():
+        return make_response(
+            "Local folder listing is disabled in this deployment", 403
         )
 
 
