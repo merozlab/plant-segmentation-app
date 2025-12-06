@@ -39,6 +39,7 @@ from app_conf import (
     POSTERS_PREFIX,
     UPLOADS_PATH,
     UPLOADS_PREFIX,
+    LOCAL_FOLDERS_PATH,
     IS_LOCAL_DEPLOYMENT,
     MODEL_RESOLUTION,
 )
@@ -771,12 +772,12 @@ if IS_LOCAL_DEPLOYMENT:
             return make_response("No folder name provided", 400)
 
         folder_name = data["folderPath"].strip()
-        # For security, restrict the folder to be within the uploads directory
-        folder_path = UPLOADS_PATH / folder_name
+        # For security, restrict the folder to be within the local_folders directory
+        folder_path = LOCAL_FOLDERS_PATH / folder_name
 
         if not folder_path.exists() or not folder_path.is_dir():
             return make_response(
-                f"Folder '{folder_name}' not found in uploads directory", 404
+                f"Folder '{folder_name}' not found in local_folders directory", 404
             )
 
         # Generate a unique ID for this processing job
@@ -797,12 +798,12 @@ if IS_LOCAL_DEPLOYMENT:
 
     @app.route("/list_local_folders", methods=["GET"])
     def list_local_folders():
-        """List all folders in the uploads directory
+        """List all folders in the local_folders directory
         (only available in local deployment)"""
         try:
             folders = []
-            if UPLOADS_PATH.exists():
-                for item in UPLOADS_PATH.iterdir():
+            if LOCAL_FOLDERS_PATH.exists():
+                for item in LOCAL_FOLDERS_PATH.iterdir():
                     if item.is_dir() and not item.name.startswith('.'):
                         folders.append(item.name)
             folders.sort()

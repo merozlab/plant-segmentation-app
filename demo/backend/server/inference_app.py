@@ -349,7 +349,7 @@ def set_preset() -> Response:
             "preset": preset_name,
             "model_size": config["model_size"],
             "resolution": config["resolution"],
-            "message": "Preset applied. Please refresh the page for changes to take effect."
+            "message": "Preset applied. Please wait for changes to take effect."
         }), 200, {"Content-Type": "application/json"})
 
     except Exception as e:

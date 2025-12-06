@@ -78,7 +78,7 @@ export default function ModelPresetSelector() {
         if (data.resolution) {
           setSelectedResolution(data.resolution);
         }
-        setUpdateStatus('Preset updated! Please refresh the page for changes to take effect.');
+        setUpdateStatus('Preset updated! Please wait for changes to take effect.');
         setTimeout(() => setUpdateStatus(''), 5000);
       } else {
         setUpdateStatus(`Error: ${data.error}`);

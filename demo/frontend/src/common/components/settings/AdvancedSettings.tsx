@@ -108,7 +108,7 @@ export default function AdvancedSettings() {
           setSelectedResolution(defaultRes);
           setCurrentResolution(defaultRes);
         }
-        setUpdateStatus('Model updated! Please refresh the page for changes to take effect.');
+        setUpdateStatus('Model updated! Please wait for changes to take effect.');
         setTimeout(() => setUpdateStatus(''), 3000);
       } else {
         setUpdateStatus(`Error: ${data.error}`);
