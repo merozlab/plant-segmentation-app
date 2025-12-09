@@ -188,6 +188,11 @@ def maskify() -> Response:
         for obj_idx, result in enumerate(mask_data["results"]):
             rle = result["mask"]
             binary_mask = mask_util.decode(rle)
+            
+            # Fill holes in the mask using morphological closing
+            kernel = np.ones((5, 5), np.uint8)
+            binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel)
+            
             # Convert to uint8 and scale to 0/255 for black and white
             bw_mask = (binary_mask * 255).astype(np.uint8)
             # Use original file name if available, else fallback to mask_{idx+1:05d}.jpg
