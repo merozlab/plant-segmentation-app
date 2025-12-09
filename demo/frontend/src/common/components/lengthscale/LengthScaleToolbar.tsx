@@ -17,7 +17,7 @@ import RestartSessionButton from '@/common/components/session/RestartSessionButt
 
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import { Button } from 'react-daisyui';
-import { ChevronRight } from '@carbon/icons-react';
+import { ChevronRight, Download } from '@carbon/icons-react';
 import PrimaryCTAButton from '@/common/components/button/PrimaryCTAButton';
 import {
     OBJECT_TOOLBAR_INDEX,
@@ -33,6 +33,7 @@ import {
     isLengthScaleSetAtom,
     sessionAtom,
     originalFilePathAtom,
+    originalFilenameAtom,
 } from '@/demo/atoms';
 import { masksReadyAtom } from '@/common/components/options/masksReadyAtom';
 import { VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
@@ -55,6 +56,7 @@ export default function LengthScaleToolbar({ onTabChange }: Props) {
     const pixelsToMetersRatio = useAtomValue(pixelsToMetersRatioAtom);
     const session = useAtomValue(sessionAtom);
     const originalFilePath = useAtomValue(originalFilePathAtom);
+    const originalFilename = useAtomValue(originalFilenameAtom);
     const setMasksReady = useSetAtom(masksReadyAtom);
     const { enqueueMessage, clearMessage } = useMessagesSnackbar();
     const [isLoading, setIsLoading] = useState(false);
@@ -154,6 +156,44 @@ export default function LengthScaleToolbar({ onTabChange }: Props) {
             setIsLengthScaleSet(true);
             enqueueMessage('lengthScaleSet');
         }
+    };
+
+    const handleDownloadConversion = () => {
+        if (!pixelsToMetersRatio) {
+            return;
+        }
+
+        // Create the text content
+        const textContent = [
+            'Pixel to Meter Conversion',
+            '=========================',
+            '',
+            `Pixels measured: ${lengthScalePixels?.toFixed(2)} px`,
+            `Real-world length: ${lengthScaleMeters} m`,
+            '',
+            `Conversion ratio: ${pixelsToMetersRatio.toFixed(6)} meters/pixel`,
+            `Inverse ratio: ${(1 / pixelsToMetersRatio).toFixed(2)} pixels/meter`,
+            '',
+            `Generated: ${new Date().toISOString()}`,
+        ].join('\n');
+
+        // Create blob and download
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+
+        // Generate filename with format: {filename}_{datetime}_conversion.txt
+        const datetime = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: YYYY-MM-DDTHH-MM-SS
+        const baseFilename = originalFilename || session?.id || 'video'; // Fallback to sessionId or 'video' if no original filename
+        const filename = `${baseFilename}_${datetime}_conversion.txt`;
+        a.download = filename;
+
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     };
 
     const statusText = useMemo(() => {
@@ -257,6 +297,20 @@ export default function LengthScaleToolbar({ onTabChange }: Props) {
                             Clear
                         </Button>
                     </div>
+                </div>
+            )}
+
+            {/* Download Conversion Button - Only show when length scale is set */}
+            {isLengthScaleSet && pixelsToMetersRatio && (
+                <div className="px-5 md:px-8 pt-3">
+                    <Button
+                        color="ghost"
+                        onClick={handleDownloadConversion}
+                        className="w-full border border-graydark-500 hover:border-graydark-400"
+                        startIcon={<Download />}
+                    >
+                        Download Conversion (.txt)
+                    </Button>
                 </div>
             )}
 
