@@ -106,7 +106,9 @@ export interface SessionStartedEvent {
   sessionId: string;
 }
 
-export interface SessionStartFailedEvent {}
+export interface SessionStartFailedEvent {
+  error?: string;
+}
 
 export interface TrackletCreatedEvent {
   // Do not send masks between workers and main thread because they are huge,

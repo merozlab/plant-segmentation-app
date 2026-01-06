@@ -45,6 +45,8 @@ BASE_MEMORY_REQUIREMENTS = {
 }
 
 # Approximate GPU memory needed for different resolutions (in MB)
+# Legacy constants - kept for reference
+# The 85% memory rule in get_max_frames() replaces GPU_MEMORY_BASELINE approach
 GPU_MEMORY_BASELINE = 2000  # Base GPU memory overhead
 
 # Preset configurations combining model size and resolution
@@ -59,14 +61,14 @@ PRESET_CONFIGS = {
     "balanced": {
         "model_size": "base_plus",
         "resolution": 1536,
-        "name": "Balanced",
+        "name": "Balanced (Recommended)",
         "description": "High quality with good performance, great for longer videos",
         "technical_detail": "Base Plus model @ 1536px"
     },
     "high_quality": {
         "model_size": "large",
         "resolution": 2048,
-        "name": "High Quality (Recommended)",
+        "name": "High Quality",
         "description": "Maximum accuracy and detail preservation, optimized for RTX 3080/5090",
         "technical_detail": "Large model @ 2048px"
     }
@@ -91,26 +93,72 @@ def get_max_resolution(model_size: str) -> int:
     return config["max_resolution"]
 
 
+def get_memory_per_frame_from_dimensions(width: int, height: int) -> float:
+    """
+    Calculate memory per frame based on actual video dimensions.
+    Matches predictor.py:213 formula: bytes_per_frame = width * height * 3 * 10
+
+    The 10x multiplier accounts for SAM2 overhead (video decoding, preprocessing,
+    embeddings, tracking state).
+
+    Args:
+        width: Video frame width in pixels
+        height: Video frame height in pixels
+
+    Returns:
+        Memory required per frame in MB
+    """
+    bytes_per_frame = width * height * 3 * 10
+    return bytes_per_frame / (1024 ** 2)  # Convert to MB
+
+
 def get_memory_per_frame(model_size: str, resolution: int) -> float:
-    """Calculate memory requirements per frame for given model size and resolution."""
-    base_memory = BASE_MEMORY_REQUIREMENTS.get(model_size, 2.5)
-    config = RESOLUTION_CONFIGS.get(model_size, RESOLUTION_CONFIGS["small"])
-    
-    # Scale memory based on resolution (quadratic scaling)
-    resolution_scale = (resolution / 1024) ** 2
-    
-    return base_memory * resolution_scale * config["memory_multiplier"]
+    """
+    Calculate memory requirements per frame for given model size and resolution.
+
+    Uses actual video dimension-based calculation matching predictor.py:
+    - Assumes square resolution (width = height = resolution)
+    - Formula: (width * height * 3 * 10) / (1024^2) MB per frame
+
+    Args:
+        model_size: Model size identifier ("small", "base_plus", "large")
+        resolution: Target resolution in pixels (1024, 1536, 2048)
+
+    Returns:
+        Memory per frame in MB
+    """
+    # For presets, resolution is both width and height (square aspect ratio)
+    return get_memory_per_frame_from_dimensions(resolution, resolution)
 
 
-def get_max_frames(model_size: str, resolution: int, available_memory_mb: int = 10000) -> int:
-    """Estimate maximum frames that can be processed given memory constraints."""
+def get_max_frames(model_size: str, resolution: int, available_memory_mb: int = None) -> int:
+    """
+    Estimate maximum frames that can be processed given available memory.
+
+    Uses 85% of available system memory for video frames, matching predictor.py:222.
+    Provides conservative estimate to maintain system stability.
+
+    Args:
+        model_size: Model size identifier
+        resolution: Target resolution in pixels
+        available_memory_mb: Available system RAM in MB (if None, uses psutil)
+
+    Returns:
+        Maximum recommended frame count (clamped between 10-1000)
+    """
+    if available_memory_mb is None:
+        import psutil
+        available_memory_mb = psutil.virtual_memory().available / (1024 ** 2)
+
     memory_per_frame = get_memory_per_frame(model_size, resolution)
-    available_for_frames = available_memory_mb - GPU_MEMORY_BASELINE
-    
-    if available_for_frames <= 0:
+
+    # Use 85% of available memory, no baseline subtraction
+    max_allowed_mb = available_memory_mb * 0.85
+
+    if max_allowed_mb <= 0:
         return 10  # Minimum viable frame count
-    
-    max_frames = int(available_for_frames / memory_per_frame)
+
+    max_frames = int(max_allowed_mb / memory_per_frame)
     return max(10, min(max_frames, 1000))  # Clamp between 10 and 1000
 
 

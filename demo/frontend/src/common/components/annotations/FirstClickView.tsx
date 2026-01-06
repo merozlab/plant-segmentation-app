@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import DefaultVideoGalleryModalTrigger from '@/common/components/gallery/DefaultVideoGalleryModalTrigger';
-import DemoVideoGallery from '@/common/components/gallery/DemoVideoGallery';
+import VideoCropModal from '@/common/components/gallery/VideoCropModal';
 import useMessagesSnackbar from '@/common/components/snackbar/useDemoMessagesSnackbar';
 import ModelPresetSelector from '@/common/components/settings/ModelPresetSelector';
 import { useEffect, useRef } from 'react';
@@ -36,7 +36,7 @@ export default function FirstClickView() {
         <ModelPresetSelector />
         <PointsImportExport />
         <DefaultVideoGalleryModalTrigger />
-        <DemoVideoGallery />
+        <VideoCropModal />
       </div>
   );
 }

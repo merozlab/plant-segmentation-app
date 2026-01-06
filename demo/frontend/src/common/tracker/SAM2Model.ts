@@ -156,13 +156,18 @@ export class SAM2Model extends Tracker {
             Logger.error(error);
             this._sendResponse<SessionStartFailedResponse>(
               'sessionStartFailed',
+              {
+                error: error instanceof Error ? error.message : String(error),
+              },
             );
             resolve();
           },
         });
       } catch (error) {
         Logger.error(error);
-        this._sendResponse<SessionStartFailedResponse>('sessionStartFailed');
+        this._sendResponse<SessionStartFailedResponse>('sessionStartFailed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         resolve();
       }
     });

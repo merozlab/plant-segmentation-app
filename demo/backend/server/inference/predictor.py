@@ -130,6 +130,55 @@ class InferenceAPI:
             except:
                 pass
 
+    def reload_model(self, model_size: str = None, resolution: int = None):
+        """Reload the SAM2 model with new configuration"""
+        logger.info(f"Reloading model with model_size={model_size}, resolution={resolution}")
+
+        # Use provided values or fall back to current configuration
+        if model_size is None:
+            model_size = self.model_size
+        if resolution is None:
+            resolution = self.resolution
+
+        # Validate resolution for model size
+        if not validate_resolution(model_size, resolution):
+            logger.warning(f"Resolution {resolution} not supported for model {model_size}, using default")
+            resolution = get_default_resolution(model_size)
+
+        # Get config and checkpoint paths
+        checkpoint = Path(APP_ROOT) / "checkpoints" / get_checkpoint_path(model_size)
+        model_cfg = get_config_path(model_size, resolution)
+
+        logger.info(f"Using config: {model_cfg}")
+        logger.info(f"Using checkpoint: {checkpoint}")
+
+        # Clear all existing sessions
+        self.session_states.clear()
+
+        # Clear GPU cache if using CUDA
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+
+        # Build new predictor
+        self.predictor = build_sam2_video_predictor(
+            model_cfg,
+            checkpoint,
+            device=self.device,
+            hydra_overrides_extra=[
+                "++model.add_all_frames_to_correct_as_cond=true",
+            ],
+        )
+
+        # Update stored configuration
+        self.model_size = model_size
+        self.resolution = resolution
+        self.model_info = get_model_info(model_size)
+
+        logger.info(f"Model reloaded successfully with model_size={model_size}, resolution={resolution}")
+        logger.info(f"Model info: {self.model_info}")
+
+        return True
+
     def autocast_context(self):
         if self.device.type == "cuda":
             return torch.autocast("cuda", dtype=torch.bfloat16)
@@ -139,6 +188,53 @@ class InferenceAPI:
     def start_session(self, request: StartSessionRequest) -> StartSessionResponse:
         with self.autocast_context(), self.inference_lock:
             session_id = str(uuid.uuid4())
+
+            # Pre-check video to estimate memory requirements and prevent OOM
+            import av
+            try:
+                with av.open(request.path) as container:
+                    video_stream = container.streams.video[0]
+                    num_frames = video_stream.frames
+                    if num_frames == 0:
+                        # Fallback: estimate from duration and fps
+                        duration = float(video_stream.duration * video_stream.time_base) if video_stream.duration else 0
+                        fps = float(video_stream.average_rate) if video_stream.average_rate else 24
+                        num_frames = int(duration * fps)
+
+                    width = video_stream.width
+                    height = video_stream.height
+
+                    logger.warning(f"[MEMORY CHECK] Video stats: {num_frames} frames, {width}x{height}")
+
+                    # Calculate estimated memory needed (rough estimate)
+                    # SAM2 uses significantly more memory than raw frames due to:
+                    # - Video decoding buffers, preprocessing, embeddings, tracking state
+                    # - Conservative estimate: ~10x raw frame size
+                    bytes_per_frame = width * height * 3 * 10  # 10x multiplier based on empirical observation
+                    estimated_memory_mb = (num_frames * bytes_per_frame) / (1024 ** 2)
+
+                    # Get available system memory (conservative limit for container)
+                    import psutil
+                    available_memory_mb = psutil.virtual_memory().available / (1024 ** 2)
+
+                    # Allow using up to 85% of available memory for video frames
+                    # Keep minimal headroom for system stability
+                    max_allowed_mb = available_memory_mb * 0.85
+
+                    logger.warning(f"[MEMORY CHECK] Estimated: {estimated_memory_mb:.1f} MB, available: {available_memory_mb:.1f} MB, max allowed: {max_allowed_mb:.1f} MB")
+
+                    if estimated_memory_mb > max_allowed_mb:
+                        raise RuntimeError(
+                            f"Video is too large to process: {num_frames} frames at {width}x{height} "
+                            f"would require ~{estimated_memory_mb:.0f}MB but only {max_allowed_mb:.0f}MB available. "
+                            f"Please reduce video resolution or duration."
+                        )
+
+            except Exception as e:
+                if "too large to process" in str(e):
+                    raise  # Re-raise our custom error
+                logger.warning(f"Could not pre-check video: {e}. Proceeding anyway...")
+
             # Offload video frames to CPU to save GPU memory for longer videos
             # This helps process more frames at the cost of slightly slower inference
             offload_video_to_cpu = self.device.type in ["mps", "cuda"]  # Enable for CUDA as well

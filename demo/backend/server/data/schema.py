@@ -257,13 +257,25 @@ class Mutation:
 
 
 def get_file_hash(video_path_or_file) -> str:
+    hasher = hashlib.sha256()
+    chunk_size = 8192  # 8KB chunks
+
     if isinstance(video_path_or_file, str):
         with open(video_path_or_file, "rb") as in_f:
-            result = hashlib.sha256(in_f.read()).hexdigest()
+            while True:
+                chunk = in_f.read(chunk_size)
+                if not chunk:
+                    break
+                hasher.update(chunk)
     else:
         video_path_or_file.seek(0)
-        result = hashlib.sha256(video_path_or_file.read()).hexdigest()
-    return result
+        while True:
+            chunk = video_path_or_file.read(chunk_size)
+            if not chunk:
+                break
+            hasher.update(chunk)
+
+    return hasher.hexdigest()
 
 
 def _get_start_sec_duration_sec(
@@ -297,7 +309,13 @@ def process_video(
         in_path = f"{tempdir}/in.mp4"
         out_path = f"{tempdir}/out.mp4"
         with open(in_path, "wb") as in_f:
-            in_f.write(file.read())
+            # Stream the file in chunks to avoid loading entire video into memory
+            chunk_size = 8192  # 8KB chunks
+            while True:
+                chunk = file.read(chunk_size)
+                if not chunk:
+                    break
+                in_f.write(chunk)
 
         try:
             video_metadata = get_video_metadata(in_path)

@@ -120,9 +120,8 @@ export default function useUploadVideo({
   onUploadError,
   setGlobalErrorMessage,
 }: Props) {
-  // const originalFilePath = useAtomValue(originalFilePathAtom);
   const [, setErrorMessage] = useAtom(uploadErrorMessageAtom); // We only need the setter here
-  const [originalFilePath, setOriginalFilePath] = useAtom(originalFilePathAtom);
+  const [, setOriginalFilePath] = useAtom(originalFilePathAtom);
   const [, setOriginalFilename] = useAtom(originalFilenameAtom);
   const [isProcessingFolder, setIsProcessingFolder] = useState<boolean>(false);
   const [folderPath, setFolderPath] = useState<string>('');
@@ -281,7 +280,6 @@ export default function useUploadVideo({
       acceptedFiles: FileWithPath[],
       fileRejections: FileRejection[],
     ) => {
-      console.log('useUploadVideo - onDrop called with:', { acceptedFiles, fileRejections });
       setErrorMessage(null);
 
       // Check if any of the files (only 1 file allowed) is rejected. The
@@ -404,11 +402,8 @@ export default function useUploadVideo({
         try {
           // Make sure videoUrl is properly formatted
           const finalUrl = videoUrl.startsWith('/') ? `${VIDEO_API_ENDPOINT}${videoUrl}` : `${VIDEO_API_ENDPOINT}/${videoUrl}`;
-          console.log("Final video URL:", finalUrl);
           const sanitizedUrl = videoUrl.replace(/\.mp4$/, '').replace(/^\/uploads/, '')
-          console.log("Sanitized video URL:", sanitizedUrl);
           setOriginalFilePath(sanitizedUrl);
-          console.log("originalFilePath:", originalFilePath);
           const videoResp = await fetch(`${finalUrl}`);
 
           if (!videoResp.ok) {
@@ -465,13 +460,11 @@ export default function useUploadVideo({
           file,
         },
         onCompleted: response => {
-          console.log('useUploadVideo - GraphQL upload completed:', response);
           const videoData = response.uploadVideo;
           // If path is already correct, use as is
           onUpload(videoData);
         },
         onError: error => {
-          console.log('useUploadVideo - GraphQL upload error:', error);
           Logger.error(error);
           
           // Parse GraphQL error message for user-friendly display

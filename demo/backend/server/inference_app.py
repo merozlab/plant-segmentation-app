@@ -258,11 +258,11 @@ def set_model_size() -> Response:
         # Validate resolution if provided
         if resolution is not None:
             from resolution_config import validate_resolution, get_model_resolutions
-            
+
             if not validate_resolution(model_size, resolution):
                 valid_resolutions = get_model_resolutions(model_size)
                 return make_response(
-                    {"error": f"Invalid resolution {resolution} for model {model_size}. Valid resolutions: {valid_resolutions}"}, 
+                    {"error": f"Invalid resolution {resolution} for model {model_size}. Valid resolutions: {valid_resolutions}"},
                     400
                 )
 
@@ -270,25 +270,28 @@ def set_model_size() -> Response:
         import app_conf
 
         app_conf.MODEL_SIZE = model_size
-        
+
         # Update resolution if provided
         if resolution is not None:
             app_conf.MODEL_RESOLUTION = resolution
 
-        # Note: This requires restarting the inference API to take effect
-        # For now, we'll just return success and let the frontend know a restart is needed
+        # Reload the model with new configuration
+        logger.info(f"Reloading model with model_size={model_size}, resolution={resolution}")
+        inference_api.reload_model(model_size=model_size, resolution=resolution)
+
         response_data = {
             "status": "success",
             "model_size": model_size,
-            "message": "Model updated. Please restart the session for changes to take effect.",
+            "message": "Model updated successfully. Please start a new session to use the new model.",
         }
-        
+
         if resolution is not None:
             response_data["resolution"] = resolution
-            
+
         return make_response(response_data, 200)
 
     except Exception as e:
+        logger.error(f"Error setting model size: {e}")
         return make_response({"error": str(e)}, 500)
 
 
@@ -297,24 +300,23 @@ def get_presets() -> Response:
     """Get all available preset configurations with memory estimates"""
     try:
         from resolution_config import get_all_presets, get_memory_per_frame, get_max_frames
-        import torch
+        import psutil
 
         presets = get_all_presets()
 
-        # Add memory estimates if GPU available
-        if torch.cuda.is_available():
-            total_memory = torch.cuda.get_device_properties(0).total_memory
-            available_memory_mb = (total_memory - torch.cuda.memory_reserved(0)) // 1024**2
+        # Get available system memory (same as predictor.py)
+        available_memory_mb = psutil.virtual_memory().available / (1024 ** 2)
 
-            for preset_name, config in presets.items():
-                model_size = config["model_size"]
-                resolution = config["resolution"]
+        # Calculate estimates for each preset
+        for preset_name, config in presets.items():
+            model_size = config["model_size"]
+            resolution = config["resolution"]
 
-                memory_per_frame = get_memory_per_frame(model_size, resolution)
-                max_frames = get_max_frames(model_size, resolution, available_memory_mb)
+            memory_per_frame = get_memory_per_frame(model_size, resolution)
+            max_frames = get_max_frames(model_size, resolution, int(available_memory_mb))
 
-                config["memory_per_frame_mb"] = round(memory_per_frame, 2)
-                config["estimated_max_frames"] = max_frames
+            config["memory_per_frame_mb"] = round(memory_per_frame, 2)
+            config["estimated_max_frames"] = max_frames
 
         return make_response(json.dumps(presets), 200, {"Content-Type": "application/json"})
 
@@ -344,12 +346,16 @@ def set_preset() -> Response:
         app_conf.MODEL_SIZE = config["model_size"]
         app_conf.MODEL_RESOLUTION = config["resolution"]
 
+        # Reload the model with new configuration
+        logger.info(f"Reloading model with preset={preset_name}, model_size={config['model_size']}, resolution={config['resolution']}")
+        inference_api.reload_model(model_size=config["model_size"], resolution=config["resolution"])
+
         return make_response(json.dumps({
             "status": "success",
             "preset": preset_name,
             "model_size": config["model_size"],
             "resolution": config["resolution"],
-            "message": "Preset applied. Please wait for changes to take effect."
+            "message": "Preset applied successfully. Please start a new session to use the new model."
         }), 200, {"Content-Type": "application/json"})
 
     except Exception as e:

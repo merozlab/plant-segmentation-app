@@ -24,6 +24,7 @@ import {
   FrameUpdateEvent,
   RenderingErrorEvent,
   SessionStartedEvent,
+  SessionStartFailedEvent,
   TrackletsEvent,
 } from '@/common/components/video/VideoWorkerBridge';
 import VideoEditor from '@/common/components/video/editor/VideoEditor';
@@ -116,6 +117,9 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
 
   const [isSessionStartFailed, setIsSessionStartFailed] =
     useState<boolean>(false);
+  const [sessionStartError, setSessionStartError] = useState<string | null>(
+    null,
+  );
 
   const [session, setSession] = useAtom(sessionAtom);
 
@@ -165,8 +169,11 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
 
     video?.addEventListener('sessionStarted', onSessionStarted);
 
-    function onSessionStartFailed() {
+    function onSessionStartFailed(event: SessionStartFailedEvent) {
       setIsSessionStartFailed(true);
+      if (event.error) {
+        setSessionStartError(event.error);
+      }
     }
 
     video?.addEventListener('sessionStartFailed', onSessionStartFailed);
@@ -393,11 +400,19 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
       {isSessionStartFailed && (
         <div {...stylex.props(styles.loadingScreenWrapper)}>
           <LoadingStateScreen
-            title="Did we just break the internet?"
-            description={
-              <>Uh oh, it looks like there was an issue starting a session.</>
+            title={
+              sessionStartError
+                ? 'Unable to process video'
+                : 'Did we just break the internet?'
             }
-            linkProps={{ to: '..', label: 'Back to homepage' }}
+            description={
+              sessionStartError ? (
+                <>{sessionStartError}</>
+              ) : (
+                <>Uh oh, it looks like there was an issue starting a session.</>
+              )
+            }
+            linkProps={{to: '..', label: 'Back to homepage'}}
           />
         </div>
       )}

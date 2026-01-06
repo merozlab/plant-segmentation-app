@@ -15,9 +15,9 @@
  */
 import { ChevronDown, ChevronUp } from '@carbon/icons-react';
 import { useCallback, useEffect, useState } from 'react';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { INFERENCE_API_ENDPOINT } from '@/demo/DemoConfig';
-import { selectedPresetAtom, updateStatusAtom, selectedResolutionAtom } from '@/demo/atoms';
+import { selectedPresetAtom, updateStatusAtom, selectedResolutionAtom, uploadConfirmationModalAtom, inputVideoAtom } from '@/demo/atoms';
 
 type PresetInfo = {
   name: string;
@@ -38,6 +38,8 @@ export default function ModelPresetSelector() {
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [, setSelectedResolution] = useAtom(selectedResolutionAtom);
+  const setUploadConfirmationModal = useSetAtom(uploadConfirmationModalAtom);
+  const inputVideo = useAtomValue(inputVideoAtom);
 
   const fetchPresets = useCallback(async () => {
     try {
@@ -78,8 +80,17 @@ export default function ModelPresetSelector() {
         if (data.resolution) {
           setSelectedResolution(data.resolution);
         }
-        setUpdateStatus('Preset updated! Please wait for changes to take effect.');
-        setTimeout(() => setUpdateStatus(''), 5000);
+        setUpdateStatus('Preset updated! Reopening video for re-cropping...');
+
+        // Reopen the upload modal if there's a video loaded
+        if (inputVideo) {
+          setTimeout(() => {
+            setUploadConfirmationModal(true);
+            setUpdateStatus('');
+          }, 1500);
+        } else {
+          setTimeout(() => setUpdateStatus(''), 3000);
+        }
       } else {
         setUpdateStatus(`Error: ${data.error}`);
         setTimeout(() => setUpdateStatus(''), 3000);
@@ -88,7 +99,7 @@ export default function ModelPresetSelector() {
       setUpdateStatus('Failed to update preset');
       setTimeout(() => setUpdateStatus(''), 3000);
     }
-  }, [setSelectedPreset, setUpdateStatus, setSelectedResolution]);
+  }, [setSelectedPreset, setUpdateStatus, setSelectedResolution, setUploadConfirmationModal, inputVideo]);
 
   // Get the currently selected preset info for collapsed view
   const currentPreset = presets[selectedPreset];

@@ -208,6 +208,9 @@ export const uploadConfirmationModalAtom = atom<boolean>(false);
 
 export const uploadedVideoDataAtom = atom<VideoData | null>(null);
 
+// Store the original uploaded video (before any cropping) so we can reopen modal with it
+export const originalUploadedVideoDataAtom = atom<VideoData | null>(null);
+
 // #####################
 // Centerline algorithm
 // #####################
@@ -270,9 +273,9 @@ export const erodeBorderAtom = atom<boolean>(true);
 // Resolution Settings
 // #####################
 
-export const currentResolutionAtom = atom<number>(2048);
-export const selectedModelAtom = atom<string>('large');
-export const selectedResolutionAtom = atom<number>(2048);
+export const currentResolutionAtom = atom<number>(1536);
+export const selectedModelAtom = atom<string>('base_plus');
+export const selectedResolutionAtom = atom<number>(1536);
 export const updateStatusAtom = atom<string>('');
-export const selectedPresetAtom = atom<string>('high_quality');
+export const selectedPresetAtom = atom<string>('balanced');
 export const usePresetsAtom = atom<boolean>(true);

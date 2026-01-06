@@ -13,8 +13,8 @@ APP_ROOT = os.getenv("APP_ROOT", "/opt/sam2")
 
 API_URL = os.getenv("API_URL", "http://localhost:7263")
 
-MODEL_SIZE = os.getenv("MODEL_SIZE", "large")  # Default to large for high quality (optimized for RTX 3080/5090)
-MODEL_RESOLUTION = int(os.getenv("MODEL_RESOLUTION", "2048")) if os.getenv("MODEL_RESOLUTION") else 2048  # Default to 2048px for maximum quality
+MODEL_SIZE = os.getenv("MODEL_SIZE", "base_plus")  # Default to base_plus for good balance of speed and accuracy
+MODEL_RESOLUTION = int(os.getenv("MODEL_RESOLUTION", "1536")) if os.getenv("MODEL_RESOLUTION") else 1536  # Default to 1536px for base_plus (balanced preset)
 
 # Feature flags
 # Set to "true" for local development, "false" for production
