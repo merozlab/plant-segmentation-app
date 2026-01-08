@@ -17,7 +17,7 @@ import useUploadVideo from '@/common/components/gallery/useUploadVideo';
 import OptionButton from '@/common/components/options/OptionButton';
 import Logger from '@/common/logger/Logger';
 import useScreenSize from '@/common/screen/useScreenSize';
-import { uploadingStateAtom, uploadErrorMessageAtom, uploadConfirmationModalAtom, uploadedVideoDataAtom } from '@/demo/atoms';
+import { uploadingStateAtom, uploadErrorMessageAtom, uploadConfirmationModalAtom, uploadedVideoDataAtom, originalUploadedVideoDataAtom } from '@/demo/atoms';
 import { Close, CloudUpload } from '@carbon/icons-react';
 import { useSetAtom } from 'jotai';
 import { MAX_FILE_SIZE_IN_MB, VIDEO_API_ENDPOINT } from '@/demo/DemoConfig';
@@ -30,6 +30,7 @@ export default function DefaultVideoGalleryModalTrigger() {
   const setUploadErrorMessage = useSetAtom(uploadErrorMessageAtom);
   const setUploadConfirmationModal = useSetAtom(uploadConfirmationModalAtom);
   const setUploadedVideoData = useSetAtom(uploadedVideoDataAtom);
+  const setOriginalUploadedVideoData = useSetAtom(originalUploadedVideoDataAtom);
   const [availableFolders, setAvailableFolders] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('');
 
@@ -50,6 +51,10 @@ export default function DefaultVideoGalleryModalTrigger() {
   }, []);
 
   const handleUpload = (videoData: any) => {
+    // Clear the original video data from any previous upload
+    // This ensures the crop modal shows the NEW video, not the old one
+    setOriginalUploadedVideoData(null);
+
     // Store the raw video data and show crop modal immediately (before processing)
     setUploadedVideoData(videoData);
     setUploadConfirmationModal(true);

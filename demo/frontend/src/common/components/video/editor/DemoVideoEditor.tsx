@@ -154,6 +154,44 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
     resetEditor();
   }, [inputVideo, resetEditor]);
 
+  const handleClearCacheAndReload = async () => {
+    try {
+      // Clear all caches
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+      }
+
+      // Clear localStorage
+      localStorage.clear();
+
+      // Clear sessionStorage
+      sessionStorage.clear();
+
+      // Clear any IndexedDB databases (used by Relay and other libraries)
+      if ('indexedDB' in window) {
+        const databases = await window.indexedDB.databases();
+        databases.forEach(db => {
+          if (db.name) {
+            window.indexedDB.deleteDatabase(db.name);
+          }
+        });
+      }
+
+      // Clear all cookies
+      document.cookie.split(';').forEach(cookie => {
+        const name = cookie.split('=')[0].trim();
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+      });
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+    } finally {
+      // Do a hard reload to the homepage - this completely restarts the app
+      // and clears all in-memory state (React, Jotai atoms, etc.)
+      window.location.href = '/';
+    }
+  };
+
   useEffect(() => {
     function onFrameUpdate(event: FrameUpdateEvent) {
       setFrameIndex(event.index);
@@ -412,7 +450,10 @@ export default function DemoVideoEditor({ video: inputVideo }: Props) {
                 <>Uh oh, it looks like there was an issue starting a session.</>
               )
             }
-            linkProps={{to: '..', label: 'Back to homepage'}}
+            linkProps={{
+              label: 'Clear cache and reload',
+              onClick: handleClearCacheAndReload,
+            }}
           />
         </div>
       )}

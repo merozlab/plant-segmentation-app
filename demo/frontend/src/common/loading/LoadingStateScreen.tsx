@@ -76,8 +76,9 @@ type Props = PropsWithChildren<{
   title: string;
   description?: string | ReactNode;
   linkProps?: {
-    to: string;
+    to?: string;
     label: string;
+    onClick?: () => void;
   };
 }>;
 
@@ -110,9 +111,21 @@ export default function LoadingStateScreen({
         )}
         {children}
         {linkProps != null && (
-          <Link to={linkProps.to} {...stylex.props(styles.link)}>
-            {linkProps.label}
-          </Link>
+          <>
+            {linkProps.onClick != null ? (
+              <button
+                onClick={linkProps.onClick}
+                {...stylex.props(styles.link)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                {linkProps.label}
+              </button>
+            ) : linkProps.to != null ? (
+              <Link to={linkProps.to} {...stylex.props(styles.link)}>
+                {linkProps.label}
+              </Link>
+            ) : null}
+          </>
         )}
       </div>
     </div>

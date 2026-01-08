@@ -32,6 +32,7 @@ services:
       - /mnt/c/Users/Public/sap_upload:/data/local_folders:rw
     environment:
       - SERVER_ENVIRONMENT=DEV
+      - MODEL_SIZE=base_plus
       - GUNICORN_WORKERS=1
       # Inference API needs to have at least 2 threads to handle an incoming
       # parallel cancel propagation request

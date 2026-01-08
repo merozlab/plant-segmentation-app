@@ -189,8 +189,25 @@ class InferenceAPI:
         with self.autocast_context(), self.inference_lock:
             session_id = str(uuid.uuid4())
 
+            # Clean up old sessions if we have more than 2 active sessions
+            # This prevents memory buildup from unclosed sessions
+            if len(self.session_states) > 2:
+                logger.warning(f"[MEMORY DEBUG] Cleaning up old sessions (have {len(self.session_states)} active)")
+                # Get oldest sessions (by session_id which includes timestamp)
+                sessions_to_close = sorted(self.session_states.keys())[:-2]  # Keep only 2 most recent
+                for old_sid in sessions_to_close:
+                    logger.warning(f"[MEMORY DEBUG] Auto-closing old session: {old_sid}")
+                    self.__clear_session_state(old_sid)
+
             # Pre-check video to estimate memory requirements and prevent OOM
             import av
+            import psutil
+            import os
+
+            # Initialize variables at function scope to avoid UnboundLocalError
+            process_memory_mb = 0
+            stop_monitoring = None
+
             try:
                 with av.open(request.path) as container:
                     video_stream = container.streams.video[0]
@@ -206,42 +223,197 @@ class InferenceAPI:
 
                     logger.warning(f"[MEMORY CHECK] Video stats: {num_frames} frames, {width}x{height}")
 
-                    # Calculate estimated memory needed (rough estimate)
-                    # SAM2 uses significantly more memory than raw frames due to:
+                    # Check frame count limits based on model size (with async loading)
+                    max_frames_recommendation = {
+                        "small": 1500,  # Increased from 1000 with async loading
+                        "base_plus": 1000,  # Increased from 600 with async loading
+                        "large": 600  # Increased from 400 with async loading
+                    }.get(self.model_size, 1000)
+
+                    if num_frames > max_frames_recommendation:
+                        logger.error(f"[MEMORY CHECK] ERROR: Video has {num_frames} frames, exceeds recommendation of {max_frames_recommendation} for {self.model_size} model!")
+                        raise RuntimeError(
+                            f"Video has too many frames ({num_frames}) for the '{self.model_size}' model preset. "
+                            f"Recommended maximum: {max_frames_recommendation} frames. "
+                            f"Please: (1) Use 'small' model preset for longer videos, (2) Trim video to ~{max_frames_recommendation//24} seconds, or (3) Reduce frame rate."
+                        )
+                    elif num_frames > max_frames_recommendation * 0.8:
+                        logger.warning(f"[MEMORY CHECK] WARNING: Video has {num_frames} frames, close to limit of {max_frames_recommendation} for {self.model_size} model")
+                        logger.warning(f"[MEMORY CHECK] Memory may be tight. Consider: (1) Using 'small' model preset, (2) Trimming video, or (3) Reducing frame rate")
+
+                    # Calculate estimated memory needed using model-specific multiplier
+                    # SAM2 uses more memory than raw frames due to:
                     # - Video decoding buffers, preprocessing, embeddings, tracking state
-                    # - Conservative estimate: ~10x raw frame size
-                    bytes_per_frame = width * height * 3 * 10  # 10x multiplier based on empirical observation
+                    # - Model-specific multiplier based on model size (small=1.5x, base_plus=2.5x, large=4.0x)
+                    # Note: We offload video frames to CPU, so this is RAM (not GPU) constraint
+                    from resolution_config import RESOLUTION_CONFIGS
+
+                    # Debug: log what model_size we have
+                    logger.warning(f"[MEMORY CHECK] self.model_size = '{self.model_size}' (type: {type(self.model_size).__name__})")
+
+                    model_config = RESOLUTION_CONFIGS.get(self.model_size, RESOLUTION_CONFIGS["base_plus"])
+                    memory_multiplier = model_config.get("memory_multiplier", 2.5)
+
+                    # If model_size is empty/None, log a warning
+                    if not self.model_size:
+                        logger.error(f"[MEMORY CHECK] WARNING: model_size is empty! Using fallback base_plus config")
+
+                    bytes_per_frame = width * height * 3 * memory_multiplier
                     estimated_memory_mb = (num_frames * bytes_per_frame) / (1024 ** 2)
 
                     # Get available system memory (conservative limit for container)
-                    import psutil
                     available_memory_mb = psutil.virtual_memory().available / (1024 ** 2)
+                    total_memory_mb = psutil.virtual_memory().total / (1024 ** 2)
+
+                    # Get current process memory usage
+                    process = psutil.Process(os.getpid())
+                    process_memory_mb = process.memory_info().rss / (1024 ** 2)
+
+                    # Check for Docker/cgroup memory limits
+                    docker_memory_limit_mb = None
+                    try:
+                        # Try to read cgroup memory limit (Docker container)
+                        with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
+                            limit_bytes = int(f.read().strip())
+                            # Check if it's not the default "unlimited" value
+                            if limit_bytes < (1 << 62):  # Not unlimited
+                                docker_memory_limit_mb = limit_bytes / (1024 ** 2)
+                                logger.warning(f"[MEMORY CHECK] Docker memory limit detected: {docker_memory_limit_mb:.1f} MB")
+                    except:
+                        # Try cgroup v2 path
+                        try:
+                            with open('/sys/fs/cgroup/memory.max', 'r') as f:
+                                limit_str = f.read().strip()
+                                if limit_str != 'max':
+                                    docker_memory_limit_mb = int(limit_str) / (1024 ** 2)
+                                    logger.warning(f"[MEMORY CHECK] Docker memory limit detected (v2): {docker_memory_limit_mb:.1f} MB")
+                        except:
+                            pass
+
+                    # Use Docker limit if it's lower than system available memory
+                    if docker_memory_limit_mb and docker_memory_limit_mb < available_memory_mb:
+                        logger.warning(f"[MEMORY CHECK] Using Docker limit ({docker_memory_limit_mb:.1f} MB) instead of available ({available_memory_mb:.1f} MB)")
+                        available_memory_mb = docker_memory_limit_mb
 
                     # Allow using up to 85% of available memory for video frames
                     # Keep minimal headroom for system stability
                     max_allowed_mb = available_memory_mb * 0.85
 
-                    logger.warning(f"[MEMORY CHECK] Estimated: {estimated_memory_mb:.1f} MB, available: {available_memory_mb:.1f} MB, max allowed: {max_allowed_mb:.1f} MB")
+                    logger.warning(f"[MEMORY CHECK] Model: {self.model_size}, multiplier: {memory_multiplier}x")
+                    logger.warning(f"[MEMORY CHECK] Total RAM: {total_memory_mb:.1f} MB, Available: {available_memory_mb:.1f} MB")
+                    logger.warning(f"[MEMORY CHECK] Process currently using: {process_memory_mb:.1f} MB")
+                    logger.warning(f"[MEMORY CHECK] Video needs: {estimated_memory_mb:.1f} MB")
 
-                    if estimated_memory_mb > max_allowed_mb:
+                    # Calculate total memory that would be needed (process + video)
+                    total_needed_mb = process_memory_mb + estimated_memory_mb
+                    logger.warning(f"[MEMORY CHECK] Total needed (process + video): {total_needed_mb:.1f} MB")
+                    logger.warning(f"[MEMORY CHECK] Max allowed: {max_allowed_mb:.1f} MB")
+
+                    if total_needed_mb > max_allowed_mb:
+                        # Suggest closing old sessions if there are any
+                        active_sessions = len(self.session_states)
+                        session_hint = ""
+                        if active_sessions > 0:
+                            session_hint = f" You have {active_sessions} session(s) still loaded. Try closing old sessions or refreshing the page."
+
                         raise RuntimeError(
-                            f"Video is too large to process: {num_frames} frames at {width}x{height} "
-                            f"would require ~{estimated_memory_mb:.0f}MB but only {max_allowed_mb:.0f}MB available. "
-                            f"Please reduce video resolution or duration."
+                            f"Not enough memory to process video: {num_frames} frames at {width}x{height} "
+                            f"would need ~{total_needed_mb:.0f}MB total (process: {process_memory_mb:.0f}MB + video: {estimated_memory_mb:.0f}MB) "
+                            f"but only {max_allowed_mb:.0f}MB available.{session_hint} "
+                            f"Try reducing video resolution/duration or using the 'small' model preset."
                         )
 
             except Exception as e:
-                if "too large to process" in str(e):
+                # Re-raise if it's one of our custom errors (memory or frame limit checks)
+                if "too large to process" in str(e) or "too many frames" in str(e):
                     raise  # Re-raise our custom error
                 logger.warning(f"Could not pre-check video: {e}. Proceeding anyway...")
 
             # Offload video frames to CPU to save GPU memory for longer videos
             # This helps process more frames at the cost of slightly slower inference
             offload_video_to_cpu = self.device.type in ["mps", "cuda"]  # Enable for CUDA as well
-            inference_state = self.predictor.init_state(
-                request.path,
-                offload_video_to_cpu=offload_video_to_cpu,
-            )
+
+            # Log memory before loading video
+            logger.warning(f"[MEMORY DEBUG] Before init_state:")
+            self._log_memory_stats()
+
+            # Check if we have too many existing sessions and warn
+            active_sessions = len(self.session_states)
+            if active_sessions > 0:
+                logger.warning(f"[MEMORY DEBUG] WARNING: {active_sessions} existing session(s) still in memory!")
+                logger.warning(f"[MEMORY DEBUG] Consider closing old sessions to free memory")
+                # Log info about existing sessions
+                for sid, session in self.session_states.items():
+                    num_frames = session['state'].get('num_frames', 0)
+                    logger.warning(f"[MEMORY DEBUG]   - Session {sid}: {num_frames} frames")
+
+            # Clear GPU cache before loading new video
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+                logger.warning(f"[MEMORY DEBUG] Cleared GPU cache")
+
+            # Monitor memory in a separate thread during init_state
+            import threading
+            import time
+            peak_memory = [process_memory_mb]  # Use list to allow modification in thread
+            stop_monitoring = threading.Event()
+
+            try:
+
+                def monitor_memory():
+                    import psutil
+                    import os
+                    proc = psutil.Process(os.getpid())
+                    while not stop_monitoring.is_set():
+                        current = proc.memory_info().rss / (1024 ** 2)
+                        if current > peak_memory[0]:
+                            peak_memory[0] = current
+                        time.sleep(0.5)  # Check every 500ms
+
+                monitor_thread = threading.Thread(target=monitor_memory, daemon=True)
+                monitor_thread.start()
+
+                logger.warning(f"[MEMORY DEBUG] Starting init_state (this may take 30-60 seconds for large videos)...")
+                inference_state = self.predictor.init_state(
+                    request.path,
+                    offload_video_to_cpu=offload_video_to_cpu,
+                    async_loading_frames=True,  # Load frames lazily to reduce peak memory
+                )
+
+                stop_monitoring.set()
+                monitor_thread.join(timeout=1.0)
+
+                logger.warning(f"[MEMORY DEBUG] init_state completed successfully")
+                logger.warning(f"[MEMORY DEBUG] Peak memory during init_state: {peak_memory[0]:.1f} MB (grew by {peak_memory[0] - process_memory_mb:.1f} MB)")
+
+            except torch.cuda.OutOfMemoryError as e:
+                if stop_monitoring is not None:
+                    stop_monitoring.set()
+                logger.error(f"[MEMORY DEBUG] GPU OOM during init_state: {e}")
+                self._log_memory_stats()
+                raise RuntimeError(
+                    f"GPU out of memory while loading video. Try using a smaller model or reducing video resolution."
+                )
+            except MemoryError as e:
+                if stop_monitoring is not None:
+                    stop_monitoring.set()
+                logger.error(f"[MEMORY DEBUG] System OOM during init_state: {e}")
+                self._log_memory_stats()
+                raise RuntimeError(
+                    f"System out of memory while loading video. Try reducing video resolution or duration."
+                )
+            except Exception as e:
+                if stop_monitoring is not None:
+                    stop_monitoring.set()
+                logger.error(f"[MEMORY DEBUG] Unexpected error during init_state: {type(e).__name__}: {e}")
+                self._log_memory_stats()
+                raise
+
+            # Log memory after loading video
+            logger.warning(f"[MEMORY DEBUG] After init_state:")
+            self._log_memory_stats()
+            logger.warning(f"[MEMORY DEBUG] Video loaded successfully: {inference_state['num_frames']} frames")
+
             self.session_states[session_id] = {
                 "canceled": False,
                 "state": inference_state,
@@ -456,6 +628,10 @@ class InferenceAPI:
                 f"{propagation_direction=}, {start_frame_idx=}, {max_frame_num_to_track=}"
             )
 
+            # Log memory before propagation
+            logger.warning(f"[MEMORY DEBUG] Before propagation:")
+            self._log_memory_stats()
+
             try:
                 session = self.__get_session(session_id)
                 session["canceled"] = False
@@ -517,9 +693,15 @@ class InferenceAPI:
                             frame_index=frame_idx,
                             results=rle_mask_list,
                         )
+            except Exception as e:
+                logger.error(f"[MEMORY DEBUG] Exception during propagation: {type(e).__name__}: {e}")
+                self._log_memory_stats()
+                raise
             finally:
                 # Log upon completion (so that e.g. we can see if two propagations happen in parallel).
                 # Using `finally` here to log even when the tracking is aborted with GeneratorExit.
+                logger.warning(f"[MEMORY DEBUG] After propagation:")
+                self._log_memory_stats()
                 logger.info(
                     f"propagation ended in session {session_id}; {self.__get_session_stats()}"
                 )
@@ -585,6 +767,40 @@ class InferenceAPI:
             )
         return session
 
+    def _log_memory_stats(self):
+        """Log detailed memory statistics for debugging."""
+        import psutil
+        import os
+
+        # System memory with detailed breakdown
+        vm = psutil.virtual_memory()
+        logger.warning(f"  System RAM breakdown:")
+        logger.warning(f"    Total: {vm.total / 1024**2:.1f} MB")
+        logger.warning(f"    Available: {vm.available / 1024**2:.1f} MB (what apps can use)")
+        logger.warning(f"    Used: {vm.used / 1024**2:.1f} MB ({vm.percent:.1f}%)")
+        logger.warning(f"    Free: {vm.free / 1024**2:.1f} MB (completely unused)")
+        logger.warning(f"    Cached: {vm.cached / 1024**2:.1f} MB (disk cache, can be freed)")
+        logger.warning(f"    Buffers: {vm.buffers / 1024**2:.1f} MB (kernel buffers)")
+
+        # Show active memory (used excluding cache/buffers)
+        # active = total - free - cached - buffers
+        active_used = vm.total - vm.free - vm.cached - vm.buffers
+        logger.warning(f"    Active (apps + system): ~{active_used / 1024**2:.1f} MB")
+
+        # Process memory
+        process = psutil.Process(os.getpid())
+        process_mem = process.memory_info()
+        logger.warning(f"  This process (PID {os.getpid()}):")
+        logger.warning(f"    RSS (real memory): {process_mem.rss / 1024**2:.1f} MB")
+        logger.warning(f"    VMS (virtual): {process_mem.vms / 1024**2:.1f} MB")
+
+        # GPU memory if available
+        if torch.cuda.is_available():
+            logger.warning(f"  GPU memory:")
+            logger.warning(f"    Allocated: {torch.cuda.memory_allocated() / 1024**2:.1f} MB")
+            logger.warning(f"    Reserved: {torch.cuda.memory_reserved() / 1024**2:.1f} MB")
+            logger.warning(f"    Free: {(torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_reserved()) / 1024**2:.1f} MB")
+
     def __get_session_stats(self):
         """Get a statistics string for live sessions and their GPU usage."""
         # print both the session ids and their video frame numbers
@@ -612,24 +828,40 @@ class InferenceAPI:
             )
             return False
         else:
-            # Clean up GPU memory when closing session
-            if self.device.type == "cuda":
-                try:
-                    # Try to clear any session-specific GPU memory
-                    inference_state = session.get("state")
-                    if inference_state is not None:
-                        # Clear any cached tensors in the inference state
-                        if hasattr(inference_state, 'obj_id_to_frames'):
-                            inference_state.obj_id_to_frames.clear()
-                        if hasattr(inference_state, 'obj_id_to_idx'):
-                            inference_state.obj_id_to_idx.clear()
-                    
-                    # Force GPU memory cleanup
+            # Aggressively clean up session memory
+            try:
+                inference_state = session.get("state")
+                if inference_state is not None:
+                    # Clear all cached data structures
+                    for key in ['obj_id_to_frames', 'obj_id_to_idx', 'output_dict_per_obj',
+                                'frames_tracked_per_obj', 'obj_ids', 'obj_idx_to_id']:
+                        if key in inference_state:
+                            if isinstance(inference_state[key], dict):
+                                inference_state[key].clear()
+                            elif isinstance(inference_state[key], list):
+                                inference_state[key].clear()
+
+                    # Clear video frames if stored
+                    if 'images' in inference_state:
+                        del inference_state['images']
+                    if 'video_segments' in inference_state:
+                        del inference_state['video_segments']
+
+                # Delete the session completely
+                del session
+
+                # Force Python garbage collection
+                import gc
+                gc.collect()
+
+                # Clean up GPU memory
+                if self.device.type == "cuda":
                     torch.cuda.empty_cache()
                     logger.info(f"GPU memory cleaned for session {session_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to clean GPU memory for session {session_id}: {e}")
-            
+
+            except Exception as e:
+                logger.warning(f"Error during aggressive cleanup for session {session_id}: {e}")
+
             logger.info(f"removed session {session_id}; {self.__get_session_stats()}")
             return True
 

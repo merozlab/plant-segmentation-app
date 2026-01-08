@@ -18,21 +18,21 @@ RESOLUTION_CONFIGS = {
         "resolutions": [1024],
         "default_resolution": 1024,
         "max_resolution": 1024,
-        "memory_multiplier": 1.5,
+        "memory_multiplier": 3.0,  # With async loading, reduced from aggressive 8.5x
         "description": "Fast processing with good quality"
     },
     "base_plus": {
         "resolutions": [1536],
         "default_resolution": 1536,
         "max_resolution": 1536,
-        "memory_multiplier": 2.5,
+        "memory_multiplier": 3.5,  # With async loading, reduced from 4.0x
         "description": "High quality with good performance"
     },
     "large": {
         "resolutions": [2048],
         "default_resolution": 2048,
         "max_resolution": 2048,
-        "memory_multiplier": 4.0,
+        "memory_multiplier": 5.0,  # With async loading, reduced from 6.0x
         "description": "Highest quality, optimized for RTX 3080/5090"
     }
 }

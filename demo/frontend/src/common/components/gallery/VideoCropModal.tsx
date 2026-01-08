@@ -145,7 +145,7 @@ const cropVideoOnBackend = async (
 };
 
 // Function to process video with crop and flip data using backend
-const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
+const processVideoWithCrop = async (videoData: any, cropSettings: any, currentResolution: number) => {
   try {
     // Convert crop dimensions to even numbers and validate
     const evenCroppedAreaPixels = makeEvenDimensions(
@@ -153,29 +153,35 @@ const processVideoWithCrop = async (videoData: any, cropSettings: any) => {
       videoData,
     );
 
-    // If no changes were made (default crop, no flip), return original video
-    if (
+    // Check if video needs resizing (exceeds current resolution)
+    // even if no explicit crop was made
+    const needsResize = videoData.width > currentResolution || videoData.height > currentResolution;
+
+    // If no changes were made (default crop, no flip) AND video doesn't need resizing, return original video
+    const isDefaultCrop =
       !evenCroppedAreaPixels &&
       !cropSettings.flipHorizontal &&
       !cropSettings.flipVertical &&
       cropSettings.crop.x === 0 &&
       cropSettings.crop.y === 0 &&
       cropSettings.crop.width === 100 &&
-      cropSettings.crop.height === 100
-    ) {
+      cropSettings.crop.height === 100;
+
+    if (isDefaultCrop && !needsResize) {
       return videoData;
     }
 
-    // Process the video if there's either crop area OR flip operations
+    // Process the video if there's crop, flip, OR resize needed
     if (
       evenCroppedAreaPixels ||
       cropSettings.flipHorizontal ||
-      cropSettings.flipVertical
+      cropSettings.flipVertical ||
+      needsResize
     ) {
       const croppedVideoPath = await cropVideoOnBackend(
         videoData.path,
         {
-          croppedAreaPixels: evenCroppedAreaPixels, // Can be null for flip-only operations
+          croppedAreaPixels: evenCroppedAreaPixels, // Can be null for flip-only or resize-only operations
           flipHorizontal: cropSettings.flipHorizontal,
           flipVertical: cropSettings.flipVertical,
         },
@@ -581,12 +587,16 @@ export default function VideoCropModal({}: Props) {
 
       try {
         // Process the video with crop and flip data
-        const processedVideoData = await processVideoWithCrop(modalVideoData, {
-          crop,
-          flipHorizontal,
-          flipVertical,
-          croppedAreaPixels: completedCrop,
-        });
+        const processedVideoData = await processVideoWithCrop(
+          modalVideoData,
+          {
+            crop,
+            flipHorizontal,
+            flipVertical,
+            croppedAreaPixels: completedCrop,
+          },
+          currentResolution
+        );
 
         // Store the original video if this is the first time
         if (!originalVideoData) {

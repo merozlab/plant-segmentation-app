@@ -62,4 +62,5 @@ CMD gunicorn --worker-tmp-dir /dev/shm \
     --workers ${GUNICORN_WORKERS} \
     --threads ${GUNICORN_THREADS} \
     --bind 0.0.0.0:${GUNICORN_PORT} \
-    --timeout 60
+    --timeout 300 \
+    --graceful-timeout 300
