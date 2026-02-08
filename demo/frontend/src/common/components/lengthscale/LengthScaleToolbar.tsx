@@ -72,7 +72,7 @@ export default function LengthScaleToolbar({ onTabChange }: Props) {
         // Only update the atom if the value is a valid positive number
         const numValue = parseFloat(newValue);
         if (!isNaN(numValue) && numValue > 0) {
-            setLengthScaleMeters(Math.max(0.001, numValue));
+            setLengthScaleMeters(numValue);
         }
     };
 
@@ -80,15 +80,11 @@ export default function LengthScaleToolbar({ onTabChange }: Props) {
     const handleInputBlur = () => {
         const numValue = parseFloat(inputValue);
         if (isNaN(numValue) || numValue <= 0) {
-            // Reset to minimum valid value if invalid
-            const validValue = 0.001;
-            setInputValue(validValue.toString());
-            setLengthScaleMeters(validValue);
+            setInputValue('1');
+            setLengthScaleMeters(1);
         } else {
-            // Ensure minimum value
-            const constrainedValue = Math.max(0.001, numValue);
-            setInputValue(constrainedValue.toString());
-            setLengthScaleMeters(constrainedValue);
+            setInputValue(numValue.toString());
+            setLengthScaleMeters(numValue);
         }
     };
 
@@ -257,9 +253,8 @@ export default function LengthScaleToolbar({ onTabChange }: Props) {
                                         value={inputValue}
                                         onChange={handleInputChange}
                                         onBlur={handleInputBlur}
-                                        min={0.001}
-                                        step={0.001}
-                                        placeholder="0.001"
+                                        step="any"
+                                        placeholder="1"
                                         className="input input-bordered w-full bg-graydark-700 text-white border-graydark-500 focus:border-primary"
                                     />
                                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">

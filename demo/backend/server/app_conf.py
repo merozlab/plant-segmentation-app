@@ -29,9 +29,9 @@ FFMPEG_NUM_THREADS = int(os.getenv("FFMPEG_NUM_THREADS", "1"))
 # i guess this is where you would configure s3
 DATA_PATH = Path(os.getenv("DATA_PATH", "/data"))
 
-# Max duration an uploaded video can have in seconds. The default is 30
+# Max duration an uploaded video can have in seconds. The default is 40
 # seconds.
-MAX_UPLOAD_VIDEO_DURATION = float(os.environ.get("MAX_UPLOAD_VIDEO_DURATION", "30"))
+MAX_UPLOAD_VIDEO_DURATION = float(os.environ.get("MAX_UPLOAD_VIDEO_DURATION", "40"))
 
 # If set, it will define which video is returned by the default video query for
 # desktop

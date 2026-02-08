@@ -233,6 +233,7 @@ const styles = stylex.create({
   content: {
     display: 'flex',
     flexDirection: 'column',
+    padding: spacing[3],
   },
   header: {
     display: 'flex',
@@ -316,6 +317,8 @@ export default function VideoCropModal({}: Props) {
   const [flipVertical, setFlipVertical] = useState(false);
   const [isReuploading, setIsReuploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [instructionDismissed, setInstructionDismissed] = useState(false);
+  const [warningDismissed, setWarningDismissed] = useState(false);
 
   // Resolution state
   const [currentResolution, setCurrentResolution] =
@@ -643,7 +646,7 @@ export default function VideoCropModal({}: Props) {
         <div onClick={handleClose} {...stylex.props(styles.closeButton)}>
           <Close size={28} />
         </div>
-        <Modal.Body style={{height: '100%'}}>
+        <Modal.Body className="overflow-y-auto" style={{maxHeight: '85vh', padding: 0}}>
           <div {...stylex.props(styles.content)}>
             <div {...stylex.props(styles.header)}>
               <div {...stylex.props(styles.title)}>
@@ -651,21 +654,33 @@ export default function VideoCropModal({}: Props) {
               </div>
             </div>
 
-            <div {...stylex.props(styles.instructionText)}>
-              <strong>
-                💡 For best results with centerline extraction:
-              </strong>{' '}
-              Position plants with their{' '}
-              <strong>base at the bottom / left</strong> of the frame (depending
-              on orientation). Use the flip controls below if your plants appear
-              upside-down or mirrored. This ensures consistent centerline
-              direction in your exported data.
-            </div>
+            {!instructionDismissed && (
+              <div {...stylex.props(styles.instructionText)} className="relative pr-8">
+                <button
+                  onClick={() => setInstructionDismissed(true)}
+                  className="absolute top-3 right-3 text-yellow-200/60 hover:text-yellow-200 transition-colors">
+                  ✕
+                </button>
+                <strong>
+                For best results with centerline extraction:
+                </strong>{' '}
+                Position plants with their{' '}
+                <strong>base at the bottom / left</strong> of the frame (depending
+                on orientation). Use the flip controls below if your plants appear
+                upside-down or mirrored. This ensures consistent centerline
+                direction in your exported data.
+              </div>
+            )}
 
             {/* Frame limit warning */}
-            {presetMaxFrames !== null && (
-              <div {...stylex.props(styles.warningText)}>
-                <strong>ℹ️ Frame Limit ({presetName}):</strong> Your current
+            {presetMaxFrames !== null && !warningDismissed && (
+              <div {...stylex.props(styles.warningText)} className="relative pr-8">
+                <button
+                  onClick={() => setWarningDismissed(true)}
+                  className="absolute top-3 right-3 text-blue-200/60 hover:text-blue-200 transition-colors">
+                  ✕
+                </button>
+                <strong>Frame Limit ({presetName}):</strong> Your current
                 preset can process up to{' '}
                 <strong>~{presetMaxFrames} frames</strong> based on available
                 system memory. If your video exceeds this limit, you may need to
@@ -683,7 +698,7 @@ export default function VideoCropModal({}: Props) {
                   ✕
                 </button>
                 <div className="text-red-300 text-sm font-medium">
-                  ❌ Error processing video
+                  Error processing video
                 </div>
                 <div className="text-red-200 text-xs mt-1 pr-6">
                   {errorMessage}

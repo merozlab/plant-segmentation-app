@@ -15,10 +15,9 @@
  */
 import LoadingStateScreen from '@/common/loading/LoadingStateScreen';
 import useSettingsContext from '@/settings/useSettingsContext';
-import {Cog6ToothIcon} from '@heroicons/react/24/outline';
 import stylex from '@stylexjs/stylex';
 import {Suspense} from 'react';
-import {Button, Indicator} from 'react-daisyui';
+import {Indicator} from 'react-daisyui';
 import {Outlet} from 'react-router-dom';
 
 const styles = stylex.create({
@@ -52,7 +51,7 @@ const styles = stylex.create({
 });
 
 export default function RootLayout() {
-  const {openModal, hasChanged} = useSettingsContext();
+  const {hasChanged} = useSettingsContext();
 
   return (
     <div {...stylex.props(styles.container)}>
@@ -76,14 +75,6 @@ export default function RootLayout() {
               vertical="top"
             />
           )}
-          <Button
-            color="ghost"
-            onClick={openModal}
-            shape="circle"
-            size="xs"
-            startIcon={<Cog6ToothIcon className="w-4 h-4" />}
-            title="Bugnub"
-          />
         </Indicator>
       </div>
     </div>
