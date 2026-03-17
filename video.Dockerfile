@@ -47,13 +47,7 @@ RUN pip install \
 RUN mkdir -p ${APP_ROOT}/server
 
 # Copy necessary files for video processing
-COPY demo/backend/server/mask_to_curvature.py ${APP_ROOT}/server/
-COPY demo/backend/server/app_conf.py ${APP_ROOT}/server/
-COPY demo/backend/server/resolution_config.py ${APP_ROOT}/server/
-COPY demo/backend/server/video_app.py ${APP_ROOT}/server/
-COPY demo/backend/server/edge_pca_centerline.py ${APP_ROOT}/server/
-COPY demo/backend/server/skeletonize_classic.py ${APP_ROOT}/server/
-COPY demo/backend/server/skeletonize_plus.py ${APP_ROOT}/server/
+COPY demo/backend/server/*.py ${APP_ROOT}/server/
 
 WORKDIR ${APP_ROOT}/server
 
