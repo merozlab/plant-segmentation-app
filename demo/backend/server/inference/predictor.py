@@ -7,10 +7,13 @@ import contextlib
 import json
 import logging
 import os
+import shutil
+import subprocess
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Generator, List
+from typing import Any, Dict, Generator, List, Optional
 
 import numpy as np
 import torch
@@ -23,7 +26,9 @@ from resolution_config import (
     validate_resolution,
     get_model_info,
     get_max_frames,
-    get_memory_per_frame
+    get_memory_per_frame,
+    CHUNK_THRESHOLD,
+    get_chunk_size,
 )
 from inference.data_types import (
     AddMaskRequest,
@@ -49,6 +54,22 @@ from sam2.build_sam import build_sam2_video_predictor
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ChunkedSessionState:
+    """Metadata for a chunked video session (long videos processed in pieces)."""
+    session_dir: Path
+    all_frames_dir: Path          # {session_dir}/all_frames/ with 00000.jpg, 00001.jpg, ...
+    video_path: str               # Original video path (for reference)
+    num_frames: int
+    video_height: int
+    video_width: int
+    chunk_size: int
+    # {obj_id: {frame_idx: {points, labels, clear_old_points}}}
+    point_inputs: Dict[int, Dict[int, Dict]] = field(default_factory=dict)
+    # {obj_id: {frame_idx: rle_mask_dict}} for add_mask corrections
+    mask_inputs: Dict[int, Dict[int, Any]] = field(default_factory=dict)
 
 
 class InferenceAPI:
@@ -190,246 +211,230 @@ class InferenceAPI:
             session_id = str(uuid.uuid4())
 
             # Clean up old sessions if we have more than 2 active sessions
-            # This prevents memory buildup from unclosed sessions
             if len(self.session_states) > 2:
                 logger.warning(f"[MEMORY DEBUG] Cleaning up old sessions (have {len(self.session_states)} active)")
-                # Get oldest sessions (by session_id which includes timestamp)
-                sessions_to_close = sorted(self.session_states.keys())[:-2]  # Keep only 2 most recent
+                sessions_to_close = sorted(self.session_states.keys())[:-2]
                 for old_sid in sessions_to_close:
                     logger.warning(f"[MEMORY DEBUG] Auto-closing old session: {old_sid}")
                     self.__clear_session_state(old_sid)
 
-            # Pre-check video to estimate memory requirements and prevent OOM
+            # Probe video for frame count and dimensions
             import av
-            import psutil
-            import os
-
-            # Initialize variables at function scope to avoid UnboundLocalError
-            process_memory_mb = 0
-            stop_monitoring = None
-
+            num_frames = 0
+            width = 0
+            height = 0
             try:
                 with av.open(request.path) as container:
                     video_stream = container.streams.video[0]
                     num_frames = video_stream.frames
                     if num_frames == 0:
-                        # Fallback: estimate from duration and fps
                         duration = float(video_stream.duration * video_stream.time_base) if video_stream.duration else 0
                         fps = float(video_stream.average_rate) if video_stream.average_rate else 24
                         num_frames = int(duration * fps)
-
                     width = video_stream.width
                     height = video_stream.height
-
                     logger.warning(f"[MEMORY CHECK] Video stats: {num_frames} frames, {width}x{height}")
-
-                    # Check frame count limits based on model size (with async loading)
-                    max_frames_recommendation = {
-                        "small": 1500,  # Increased from 1000 with async loading
-                        "base_plus": 1000,  # Increased from 600 with async loading
-                        "large": 600  # Increased from 400 with async loading
-                    }.get(self.model_size, 1000)
-
-                    if num_frames > max_frames_recommendation:
-                        logger.error(f"[MEMORY CHECK] ERROR: Video has {num_frames} frames, exceeds recommendation of {max_frames_recommendation} for {self.model_size} model!")
-                        raise RuntimeError(
-                            f"Video has too many frames ({num_frames}) for the '{self.model_size}' model preset. "
-                            f"Recommended maximum: {max_frames_recommendation} frames. "
-                            f"Please: (1) Use 'small' model preset for longer videos, (2) Trim video to ~{max_frames_recommendation//24} seconds, or (3) Reduce frame rate."
-                        )
-                    elif num_frames > max_frames_recommendation * 0.8:
-                        logger.warning(f"[MEMORY CHECK] WARNING: Video has {num_frames} frames, close to limit of {max_frames_recommendation} for {self.model_size} model")
-                        logger.warning(f"[MEMORY CHECK] Memory may be tight. Consider: (1) Using 'small' model preset, (2) Trimming video, or (3) Reducing frame rate")
-
-                    # Calculate estimated memory needed using model-specific multiplier
-                    # SAM2 uses more memory than raw frames due to:
-                    # - Video decoding buffers, preprocessing, embeddings, tracking state
-                    # - Model-specific multiplier based on model size (small=1.5x, base_plus=2.5x, large=4.0x)
-                    # Note: We offload video frames to CPU, so this is RAM (not GPU) constraint
-                    from resolution_config import RESOLUTION_CONFIGS
-
-                    # Debug: log what model_size we have
-                    logger.warning(f"[MEMORY CHECK] self.model_size = '{self.model_size}' (type: {type(self.model_size).__name__})")
-
-                    model_config = RESOLUTION_CONFIGS.get(self.model_size, RESOLUTION_CONFIGS["base_plus"])
-                    memory_multiplier = model_config.get("memory_multiplier", 2.5)
-
-                    # If model_size is empty/None, log a warning
-                    if not self.model_size:
-                        logger.error(f"[MEMORY CHECK] WARNING: model_size is empty! Using fallback base_plus config")
-
-                    bytes_per_frame = width * height * 3 * memory_multiplier
-                    estimated_memory_mb = (num_frames * bytes_per_frame) / (1024 ** 2)
-
-                    # Get available system memory (conservative limit for container)
-                    available_memory_mb = psutil.virtual_memory().available / (1024 ** 2)
-                    total_memory_mb = psutil.virtual_memory().total / (1024 ** 2)
-
-                    # Get current process memory usage
-                    process = psutil.Process(os.getpid())
-                    process_memory_mb = process.memory_info().rss / (1024 ** 2)
-
-                    # Check for Docker/cgroup memory limits
-                    docker_memory_limit_mb = None
-                    try:
-                        # Try to read cgroup memory limit (Docker container)
-                        with open('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'r') as f:
-                            limit_bytes = int(f.read().strip())
-                            # Check if it's not the default "unlimited" value
-                            if limit_bytes < (1 << 62):  # Not unlimited
-                                docker_memory_limit_mb = limit_bytes / (1024 ** 2)
-                                logger.warning(f"[MEMORY CHECK] Docker memory limit detected: {docker_memory_limit_mb:.1f} MB")
-                    except:
-                        # Try cgroup v2 path
-                        try:
-                            with open('/sys/fs/cgroup/memory.max', 'r') as f:
-                                limit_str = f.read().strip()
-                                if limit_str != 'max':
-                                    docker_memory_limit_mb = int(limit_str) / (1024 ** 2)
-                                    logger.warning(f"[MEMORY CHECK] Docker memory limit detected (v2): {docker_memory_limit_mb:.1f} MB")
-                        except:
-                            pass
-
-                    # Use Docker limit if it's lower than system available memory
-                    if docker_memory_limit_mb and docker_memory_limit_mb < available_memory_mb:
-                        logger.warning(f"[MEMORY CHECK] Using Docker limit ({docker_memory_limit_mb:.1f} MB) instead of available ({available_memory_mb:.1f} MB)")
-                        available_memory_mb = docker_memory_limit_mb
-
-                    # Allow using up to 85% of available memory for video frames
-                    # Keep minimal headroom for system stability
-                    max_allowed_mb = available_memory_mb * 0.85
-
-                    logger.warning(f"[MEMORY CHECK] Model: {self.model_size}, multiplier: {memory_multiplier}x")
-                    logger.warning(f"[MEMORY CHECK] Total RAM: {total_memory_mb:.1f} MB, Available: {available_memory_mb:.1f} MB")
-                    logger.warning(f"[MEMORY CHECK] Process currently using: {process_memory_mb:.1f} MB")
-                    logger.warning(f"[MEMORY CHECK] Video needs: {estimated_memory_mb:.1f} MB")
-
-                    # Calculate total memory that would be needed (process + video)
-                    total_needed_mb = process_memory_mb + estimated_memory_mb
-                    logger.warning(f"[MEMORY CHECK] Total needed (process + video): {total_needed_mb:.1f} MB")
-                    logger.warning(f"[MEMORY CHECK] Max allowed: {max_allowed_mb:.1f} MB")
-
-                    if total_needed_mb > max_allowed_mb:
-                        # Suggest closing old sessions if there are any
-                        active_sessions = len(self.session_states)
-                        session_hint = ""
-                        if active_sessions > 0:
-                            session_hint = f" You have {active_sessions} session(s) still loaded. Try closing old sessions or refreshing the page."
-
-                        raise RuntimeError(
-                            f"Not enough memory to process video: {num_frames} frames at {width}x{height} "
-                            f"would need ~{total_needed_mb:.0f}MB total (process: {process_memory_mb:.0f}MB + video: {estimated_memory_mb:.0f}MB) "
-                            f"but only {max_allowed_mb:.0f}MB available.{session_hint} "
-                            f"Try reducing video resolution/duration or using the 'small' model preset."
-                        )
-
             except Exception as e:
-                # Re-raise if it's one of our custom errors (memory or frame limit checks)
-                if "too large to process" in str(e) or "too many frames" in str(e):
-                    raise  # Re-raise our custom error
-                logger.warning(f"Could not pre-check video: {e}. Proceeding anyway...")
+                logger.warning(f"Could not probe video: {e}. Proceeding with normal session...")
 
-            # Offload video frames to CPU to save GPU memory for longer videos
-            # This helps process more frames at the cost of slightly slower inference
-            offload_video_to_cpu = self.device.type in ["mps", "cuda"]  # Enable for CUDA as well
+            # Decide: chunked mode for long videos, normal mode otherwise
+            if num_frames > CHUNK_THRESHOLD:
+                logger.warning(f"[CHUNKED] Video has {num_frames} frames (> {CHUNK_THRESHOLD}), using chunked mode")
+                return self._start_chunked_session(session_id, request, num_frames, width, height)
+            else:
+                return self._start_normal_session(session_id, request, num_frames, width, height)
 
-            # Log memory before loading video
-            logger.warning(f"[MEMORY DEBUG] Before init_state:")
-            self._log_memory_stats()
+    def _start_normal_session(
+        self, session_id: str, request: StartSessionRequest,
+        num_frames: int, width: int, height: int,
+    ) -> StartSessionResponse:
+        """Original session start: loads all frames into SAM2 at once."""
+        import psutil
 
-            # Check if we have too many existing sessions and warn
-            active_sessions = len(self.session_states)
-            if active_sessions > 0:
-                logger.warning(f"[MEMORY DEBUG] WARNING: {active_sessions} existing session(s) still in memory!")
-                logger.warning(f"[MEMORY DEBUG] Consider closing old sessions to free memory")
-                # Log info about existing sessions
-                for sid, session in self.session_states.items():
-                    num_frames = session['state'].get('num_frames', 0)
-                    logger.warning(f"[MEMORY DEBUG]   - Session {sid}: {num_frames} frames")
+        process_memory_mb = 0
+        stop_monitoring = None
 
-            # Clear GPU cache before loading new video
-            if self.device.type == "cuda":
-                torch.cuda.empty_cache()
-                logger.warning(f"[MEMORY DEBUG] Cleared GPU cache")
+        # Memory estimation and checks for normal mode
+        try:
+            from resolution_config import RESOLUTION_CONFIGS
 
-            # Monitor memory in a separate thread during init_state
-            import threading
-            import time
-            peak_memory = [process_memory_mb]  # Use list to allow modification in thread
-            stop_monitoring = threading.Event()
+            model_config = RESOLUTION_CONFIGS.get(self.model_size, RESOLUTION_CONFIGS["base_plus"])
+            memory_multiplier = model_config.get("memory_multiplier", 2.5)
 
-            try:
+            bytes_per_frame = width * height * 3 * memory_multiplier
+            estimated_memory_mb = (num_frames * bytes_per_frame) / (1024 ** 2)
 
-                def monitor_memory():
-                    import psutil
-                    import os
-                    proc = psutil.Process(os.getpid())
-                    while not stop_monitoring.is_set():
-                        current = proc.memory_info().rss / (1024 ** 2)
-                        if current > peak_memory[0]:
-                            peak_memory[0] = current
-                        time.sleep(0.5)  # Check every 500ms
+            available_memory_mb = psutil.virtual_memory().available / (1024 ** 2)
+            total_memory_mb = psutil.virtual_memory().total / (1024 ** 2)
+            process = psutil.Process(os.getpid())
+            process_memory_mb = process.memory_info().rss / (1024 ** 2)
 
-                monitor_thread = threading.Thread(target=monitor_memory, daemon=True)
-                monitor_thread.start()
+            max_allowed_mb = available_memory_mb * 0.85
 
-                logger.warning(f"[MEMORY DEBUG] Starting init_state (this may take 30-60 seconds for large videos)...")
-                inference_state = self.predictor.init_state(
-                    request.path,
-                    offload_video_to_cpu=offload_video_to_cpu,
-                    async_loading_frames=True,  # Load frames lazily to reduce peak memory
+            logger.warning(f"[MEMORY CHECK] Model: {self.model_size}, multiplier: {memory_multiplier}x")
+            logger.warning(f"[MEMORY CHECK] Total RAM: {total_memory_mb:.1f} MB, Available: {available_memory_mb:.1f} MB")
+            logger.warning(f"[MEMORY CHECK] Process: {process_memory_mb:.1f} MB, Video needs: {estimated_memory_mb:.1f} MB")
+
+            total_needed_mb = process_memory_mb + estimated_memory_mb
+            if total_needed_mb > max_allowed_mb:
+                active_sessions = len(self.session_states)
+                session_hint = ""
+                if active_sessions > 0:
+                    session_hint = f" You have {active_sessions} session(s) still loaded. Try closing old sessions."
+                raise RuntimeError(
+                    f"Not enough memory: {num_frames} frames at {width}x{height} "
+                    f"needs ~{total_needed_mb:.0f}MB but only {max_allowed_mb:.0f}MB available.{session_hint}"
                 )
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not estimate memory: {e}. Proceeding anyway...")
 
+        offload_video_to_cpu = self.device.type in ["mps", "cuda"]
+
+        logger.warning(f"[MEMORY DEBUG] Before init_state:")
+        self._log_memory_stats()
+
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
+
+        import threading
+        import time
+        peak_memory = [process_memory_mb]
+        stop_monitoring = threading.Event()
+
+        try:
+            def monitor_memory():
+                proc = psutil.Process(os.getpid())
+                while not stop_monitoring.is_set():
+                    current = proc.memory_info().rss / (1024 ** 2)
+                    if current > peak_memory[0]:
+                        peak_memory[0] = current
+                    time.sleep(0.5)
+
+            monitor_thread = threading.Thread(target=monitor_memory, daemon=True)
+            monitor_thread.start()
+
+            inference_state = self.predictor.init_state(
+                request.path,
+                offload_video_to_cpu=offload_video_to_cpu,
+                async_loading_frames=True,
+            )
+
+            stop_monitoring.set()
+            monitor_thread.join(timeout=1.0)
+
+            logger.warning(f"[MEMORY DEBUG] init_state completed. Peak: {peak_memory[0]:.1f} MB")
+
+        except torch.cuda.OutOfMemoryError as e:
+            if stop_monitoring is not None:
                 stop_monitoring.set()
-                monitor_thread.join(timeout=1.0)
+            raise RuntimeError(f"GPU out of memory while loading video: {e}")
+        except MemoryError as e:
+            if stop_monitoring is not None:
+                stop_monitoring.set()
+            raise RuntimeError(f"System out of memory while loading video: {e}")
+        except Exception as e:
+            if stop_monitoring is not None:
+                stop_monitoring.set()
+            raise
 
-                logger.warning(f"[MEMORY DEBUG] init_state completed successfully")
-                logger.warning(f"[MEMORY DEBUG] Peak memory during init_state: {peak_memory[0]:.1f} MB (grew by {peak_memory[0] - process_memory_mb:.1f} MB)")
+        logger.warning(f"[MEMORY DEBUG] After init_state:")
+        self._log_memory_stats()
 
-            except torch.cuda.OutOfMemoryError as e:
-                if stop_monitoring is not None:
-                    stop_monitoring.set()
-                logger.error(f"[MEMORY DEBUG] GPU OOM during init_state: {e}")
-                self._log_memory_stats()
-                raise RuntimeError(
-                    f"GPU out of memory while loading video. Try using a smaller model or reducing video resolution."
-                )
-            except MemoryError as e:
-                if stop_monitoring is not None:
-                    stop_monitoring.set()
-                logger.error(f"[MEMORY DEBUG] System OOM during init_state: {e}")
-                self._log_memory_stats()
-                raise RuntimeError(
-                    f"System out of memory while loading video. Try reducing video resolution or duration."
-                )
-            except Exception as e:
-                if stop_monitoring is not None:
-                    stop_monitoring.set()
-                logger.error(f"[MEMORY DEBUG] Unexpected error during init_state: {type(e).__name__}: {e}")
-                self._log_memory_stats()
-                raise
+        self.session_states[session_id] = {
+            "canceled": False,
+            "state": inference_state,
+        }
+        return StartSessionResponse(session_id=session_id)
 
-            # Log memory after loading video
-            logger.warning(f"[MEMORY DEBUG] After init_state:")
-            self._log_memory_stats()
-            logger.warning(f"[MEMORY DEBUG] Video loaded successfully: {inference_state['num_frames']} frames")
+    def _start_chunked_session(
+        self, session_id: str, request: StartSessionRequest,
+        num_frames: int, width: int, height: int,
+    ) -> StartSessionResponse:
+        """Start a chunked session: extract all frames as JPEG, defer SAM2 init to propagation time."""
+        session_dir = UPLOADS_PATH / session_id
+        all_frames_dir = session_dir / "all_frames"
+        all_frames_dir.mkdir(parents=True, exist_ok=True)
 
-            self.session_states[session_id] = {
-                "canceled": False,
-                "state": inference_state,
-            }
-            return StartSessionResponse(session_id=session_id)
+        chunk_size = get_chunk_size(width, height, self.model_size)
+        logger.warning(f"[CHUNKED] Extracting {num_frames} frames to {all_frames_dir} (chunk_size={chunk_size})")
+
+        # Extract all frames as JPEG using ffmpeg
+        cmd = [
+            "ffmpeg", "-i", request.path,
+            "-q:v", "2",
+            "-start_number", "0",
+            str(all_frames_dir / "%05d.jpg"),
+            "-y",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode != 0:
+                raise RuntimeError(f"ffmpeg failed: {result.stderr[:500]}")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Frame extraction timed out (>5min)")
+
+        # Count actual extracted frames
+        actual_frames = len(list(all_frames_dir.glob("*.jpg")))
+        if actual_frames == 0:
+            raise RuntimeError("No frames were extracted from the video")
+        logger.warning(f"[CHUNKED] Extracted {actual_frames} frames (expected {num_frames})")
+
+        cs = ChunkedSessionState(
+            session_dir=session_dir,
+            all_frames_dir=all_frames_dir,
+            video_path=request.path,
+            num_frames=actual_frames,
+            video_height=height,
+            video_width=width,
+            chunk_size=chunk_size,
+        )
+
+        self.session_states[session_id] = {
+            "canceled": False,
+            "chunked": True,
+            "chunked_state": cs,
+            # Minimal stub so __get_session_stats doesn't break
+            "state": {"num_frames": actual_frames, "obj_ids": []},
+        }
+
+        logger.warning(f"[CHUNKED] Session {session_id} ready: {actual_frames} frames, chunk_size={chunk_size}")
+        return StartSessionResponse(session_id=session_id)
 
     def close_session(self, request: CloseSessionRequest) -> CloseSessionResponse:
         is_successful = self.__clear_session_state(request.session_id)
         return CloseSessionResponse(success=is_successful)
+
+    def _is_chunked(self, session: Dict) -> bool:
+        return session.get("chunked", False)
+
+    def _save_frame_json(self, session_id: str, response: PropagateDataResponse):
+        """Save a frame response as JSON for the maskify endpoint."""
+        try:
+            output_dir = UPLOADS_PATH / session_id
+            output_dir.mkdir(parents=True, exist_ok=True)
+            frame_filename = output_dir / f"frame_{response.frame_index:05d}.json"
+            frame_data = {
+                "frame_index": response.frame_index,
+                "results": [
+                    {
+                        "object_id": r.object_id,
+                        "mask": {"size": r.mask.size, "counts": r.mask.counts},
+                    }
+                    for r in response.results
+                ],
+            }
+            with open(frame_filename, "w") as f:
+                json.dump(frame_data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving frame JSON: {e}")
 
     def add_points(
         self, request: AddPointsRequest, test: str = ""
     ) -> PropagateDataResponse:
         with self.autocast_context(), self.inference_lock:
             session = self.__get_session(request.session_id)
-            inference_state = session["state"]
 
             frame_idx = request.frame_index
             obj_id = request.object_id
@@ -437,7 +442,13 @@ class InferenceAPI:
             labels = request.labels
             clear_old_points = request.clear_old_points
 
-            # add new prompts and instantly get the output on the same frame
+            if self._is_chunked(session):
+                return self._add_points_chunked(
+                    session, request.session_id, frame_idx, obj_id, points, labels, clear_old_points
+                )
+
+            inference_state = session["state"]
+
             frame_idx, object_ids, masks = self.predictor.add_new_points_or_box(
                 inference_state=inference_state,
                 frame_idx=frame_idx,
@@ -454,50 +465,80 @@ class InferenceAPI:
                 object_ids=object_ids, masks=masks_binary
             )
 
-            # Create response object
             response = PropagateDataResponse(
                 frame_index=frame_idx,
                 results=rle_mask_list,
             )
 
-            # Save frame data as JSON to the same folder structure as propagate_in_video
-            try:
-                output_dir = UPLOADS_PATH / request.session_id
-                output_dir.mkdir(parents=True, exist_ok=True)
-
-                # Save to file in the same format as propagate_in_video
-                frame_filename = output_dir / f"frame_{frame_idx:05d}.json"
-
-                # Manually create the frame data structure to match propagate_in_video format
-                frame_data = {
-                    "frame_index": response.frame_index,
-                    "results": [
-                        {
-                            "object_id": result.object_id,
-                            "mask": {
-                                "size": result.mask.size,
-                                "counts": result.mask.counts,
-                            },
-                        }
-                        for result in response.results
-                    ],
-                }
-
-                with open(frame_filename, "w") as f:
-                    json.dump(frame_data, f, indent=2)
-
-                logger.debug(f"Saved add_points frame {frame_idx} to {frame_filename}")
-            except Exception as e:
-                logger.error(f"Error saving add_points frame: {str(e)}")
-
+            self._save_frame_json(request.session_id, response)
             return response
 
+    def _add_points_chunked(
+        self, session: Dict, session_id: str,
+        frame_idx: int, obj_id: int, points, labels, clear_old_points: bool,
+    ) -> PropagateDataResponse:
+        """Handle add_points for chunked sessions: store inputs + preview via tiny chunk."""
+        cs: ChunkedSessionState = session["chunked_state"]
+
+        # Store the point input for later replay during propagation
+        if obj_id not in cs.point_inputs:
+            cs.point_inputs[obj_id] = {}
+        cs.point_inputs[obj_id][frame_idx] = {
+            "points": points,
+            "labels": labels,
+            "clear_old_points": clear_old_points,
+        }
+
+        # Track obj_id in the stub state
+        if obj_id not in session["state"]["obj_ids"]:
+            session["state"]["obj_ids"].append(obj_id)
+
+        # Create a tiny preview chunk (~10 frames) around the clicked frame
+        preview_radius = 5
+        preview_start = max(0, frame_idx - preview_radius)
+        preview_end = min(cs.num_frames, frame_idx + preview_radius)
+
+        chunk_dir = self._create_chunk_dir(cs, preview_start, preview_end, "preview")
+        offload_video_to_cpu = self.device.type in ["mps", "cuda"]
+
+        try:
+            inference_state = self.predictor.init_state(
+                str(chunk_dir),
+                offload_video_to_cpu=offload_video_to_cpu,
+                async_loading_frames=False,
+            )
+
+            local_idx = frame_idx - preview_start
+            local_idx, object_ids, masks = self.predictor.add_new_points_or_box(
+                inference_state=inference_state,
+                frame_idx=local_idx,
+                obj_id=obj_id,
+                points=points,
+                labels=labels,
+                clear_old_points=clear_old_points,
+                normalize_coords=False,
+            )
+
+            masks_binary = (masks > self.score_thresh)[:, 0].cpu().numpy()
+            rle_mask_list = self.__get_rle_mask_list(object_ids=object_ids, masks=masks_binary)
+
+            response = PropagateDataResponse(
+                frame_index=frame_idx,  # Return global frame index
+                results=rle_mask_list,
+            )
+
+            self._save_frame_json(session_id, response)
+
+            self.predictor.reset_state(inference_state)
+            del inference_state
+            return response
+        finally:
+            self._cleanup_chunk_dir(chunk_dir)
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+
     def add_mask(self, request: AddMaskRequest) -> PropagateDataResponse:
-        """
-        Add new points on a specific video frame.
-        - mask is a numpy array of shape [H_im, W_im] (containing 1 for foreground and 0 for background).
-        Note: providing an input mask would overwrite any previous input points on this frame.
-        """
+        """Add a mask on a specific video frame."""
         with self.autocast_context(), self.inference_lock:
             session_id = request.session_id
             frame_idx = request.frame_index
@@ -507,15 +548,38 @@ class InferenceAPI:
                 "size": request.mask.size,
             }
 
+            session = self.__get_session(session_id)
+
+            if self._is_chunked(session):
+                cs: ChunkedSessionState = session["chunked_state"]
+                # Store mask input for replay during propagation
+                if obj_id not in cs.mask_inputs:
+                    cs.mask_inputs[obj_id] = {}
+                cs.mask_inputs[obj_id][frame_idx] = rle_mask
+                if obj_id not in session["state"]["obj_ids"]:
+                    session["state"]["obj_ids"].append(obj_id)
+
+                # Return the mask as-is (it was provided by the user)
+                mask = decode_masks(rle_mask)
+                masks_binary = np.array(mask > 0, dtype=np.uint8)
+                rle_result = encode_masks(np.asfortranarray(masks_binary))
+                rle_result["counts"] = rle_result["counts"].decode()
+                return PropagateDataResponse(
+                    frame_index=frame_idx,
+                    results=[PropagateDataValue(
+                        object_id=obj_id,
+                        mask=Mask(size=rle_result["size"], counts=rle_result["counts"]),
+                    )],
+                )
+
             mask = decode_masks(rle_mask)
 
             logger.info(
                 f"add mask on frame {frame_idx} in session {session_id}: {obj_id=}, {mask.shape=}"
             )
-            session = self.__get_session(session_id)
             inference_state = session["state"]
 
-            frame_idx, obj_ids, video_res_masks = self.model.add_new_mask(
+            frame_idx, obj_ids, video_res_masks = self.predictor.add_new_mask(
                 inference_state=inference_state,
                 frame_idx=frame_idx,
                 obj_id=obj_id,
@@ -535,9 +599,7 @@ class InferenceAPI:
     def clear_points_in_frame(
         self, request: ClearPointsInFrameRequest
     ) -> PropagateDataResponse:
-        """
-        Remove all input points in a specific frame.
-        """
+        """Remove all input points in a specific frame."""
         with self.autocast_context(), self.inference_lock:
             session_id = request.session_id
             frame_idx = request.frame_index
@@ -547,6 +609,17 @@ class InferenceAPI:
                 f"clear inputs on frame {frame_idx} in session {session_id}: {obj_id=}"
             )
             session = self.__get_session(session_id)
+
+            if self._is_chunked(session):
+                cs: ChunkedSessionState = session["chunked_state"]
+                # Remove stored inputs for this object on this frame
+                if obj_id in cs.point_inputs and frame_idx in cs.point_inputs[obj_id]:
+                    del cs.point_inputs[obj_id][frame_idx]
+                if obj_id in cs.mask_inputs and frame_idx in cs.mask_inputs[obj_id]:
+                    del cs.mask_inputs[obj_id][frame_idx]
+                # Return an empty mask response
+                return PropagateDataResponse(frame_index=frame_idx, results=[])
+
             inference_state = session["state"]
             frame_idx, obj_ids, video_res_masks = (
                 self.predictor.clear_all_prompts_in_frame(
@@ -567,26 +640,39 @@ class InferenceAPI:
     def clear_points_in_video(
         self, request: ClearPointsInVideoRequest
     ) -> ClearPointsInVideoResponse:
-        """
-        Remove all input points in all frames throughout the video.
-        """
+        """Remove all input points in all frames throughout the video."""
         with self.autocast_context(), self.inference_lock:
             session_id = request.session_id
             logger.info(f"clear all inputs across the video in session {session_id}")
             session = self.__get_session(session_id)
+
+            if self._is_chunked(session):
+                cs: ChunkedSessionState = session["chunked_state"]
+                cs.point_inputs.clear()
+                cs.mask_inputs.clear()
+                session["state"]["obj_ids"] = []
+                return ClearPointsInVideoResponse(success=True)
+
             inference_state = session["state"]
             self.predictor.reset_state(inference_state)
             return ClearPointsInVideoResponse(success=True)
 
     def remove_object(self, request: RemoveObjectRequest) -> RemoveObjectResponse:
-        """
-        Remove an object id from the tracking state.
-        """
+        """Remove an object id from the tracking state."""
         with self.autocast_context(), self.inference_lock:
             session_id = request.session_id
             obj_id = request.object_id
             logger.info(f"remove object in session {session_id}: {obj_id=}")
             session = self.__get_session(session_id)
+
+            if self._is_chunked(session):
+                cs: ChunkedSessionState = session["chunked_state"]
+                cs.point_inputs.pop(obj_id, None)
+                cs.mask_inputs.pop(obj_id, None)
+                if obj_id in session["state"]["obj_ids"]:
+                    session["state"]["obj_ids"].remove(obj_id)
+                return RemoveObjectResponse(results=[])
+
             inference_state = session["state"]
             new_obj_ids, updated_frames = self.predictor.remove_object(
                 inference_state, obj_id
@@ -610,96 +696,79 @@ class InferenceAPI:
     def propagate_in_video(
         self, request: PropagateInVideoRequest
     ) -> Generator[PropagateDataResponse, None, None]:
+        """Propagate existing input points in all frames to track the object across video."""
         session_id = request.session_id
         start_frame_idx = request.start_frame_index
-        propagation_direction = "both"
-        max_frame_num_to_track = None
 
-        """
-        Propagate existing input points in all frames to track the object across video.
-        """
-
-        # Note that as this method is a generator, we also need to use autocast_context
-        # in caller to this method to ensure that it's called under the correct context
-        # (we've added `autocast_context` to `gen_track_with_mask_stream` in app.py).
         with self.autocast_context(), self.inference_lock:
-            logger.info(
-                f"propagate in video in session {session_id}: "
-                f"{propagation_direction=}, {start_frame_idx=}, {max_frame_num_to_track=}"
-            )
-
-            # Log memory before propagation
-            logger.warning(f"[MEMORY DEBUG] Before propagation:")
-            self._log_memory_stats()
-
             try:
                 session = self.__get_session(session_id)
                 session["canceled"] = False
 
+                if self._is_chunked(session):
+                    logger.info(f"[CHUNKED] Starting chunked propagation for session {session_id}")
+                    yield from self._propagate_chunked(session, session_id, start_frame_idx)
+                    return
+
+                # --- Normal (non-chunked) propagation ---
                 inference_state = session["state"]
-                if propagation_direction not in ["both", "forward", "backward"]:
-                    raise ValueError(
-                        f"invalid propagation direction: {propagation_direction}"
-                    )
+
+                logger.info(
+                    f"propagate in video in session {session_id}: "
+                    f"start_frame_idx={start_frame_idx}"
+                )
+                logger.warning(f"[MEMORY DEBUG] Before propagation:")
+                self._log_memory_stats()
 
                 self.__clear_non_cond_outputs(inference_state)
 
-                # First doing the forward propagation
-                if propagation_direction in ["both", "forward"]:
-                    for outputs in self.predictor.propagate_in_video(
-                        inference_state=inference_state,
-                        start_frame_idx=start_frame_idx,
-                        max_frame_num_to_track=max_frame_num_to_track,
-                        reverse=False,
-                    ):
-                        if session["canceled"]:
-                            return None
+                # Forward propagation
+                for outputs in self.predictor.propagate_in_video(
+                    inference_state=inference_state,
+                    start_frame_idx=start_frame_idx,
+                    reverse=False,
+                ):
+                    if session["canceled"]:
+                        return None
 
-                        frame_idx, obj_ids, video_res_masks = outputs
-                        masks_binary = (
-                            (video_res_masks > self.score_thresh)[:, 0].cpu().numpy()
-                        )
+                    frame_idx, obj_ids, video_res_masks = outputs
+                    masks_binary = (
+                        (video_res_masks > self.score_thresh)[:, 0].cpu().numpy()
+                    )
+                    rle_mask_list = self.__get_rle_mask_list(
+                        object_ids=obj_ids, masks=masks_binary
+                    )
+                    yield PropagateDataResponse(
+                        frame_index=frame_idx,
+                        results=rle_mask_list,
+                    )
 
-                        rle_mask_list = self.__get_rle_mask_list(
-                            object_ids=obj_ids, masks=masks_binary
-                        )
+                # Backward propagation
+                for outputs in self.predictor.propagate_in_video(
+                    inference_state=inference_state,
+                    start_frame_idx=start_frame_idx,
+                    reverse=True,
+                ):
+                    if session["canceled"]:
+                        return None
 
-                        yield PropagateDataResponse(
-                            frame_index=frame_idx,
-                            results=rle_mask_list,
-                        )
+                    frame_idx, obj_ids, video_res_masks = outputs
+                    masks_binary = (
+                        (video_res_masks > self.score_thresh)[:, 0].cpu().numpy()
+                    )
+                    rle_mask_list = self.__get_rle_mask_list(
+                        object_ids=obj_ids, masks=masks_binary
+                    )
+                    yield PropagateDataResponse(
+                        frame_index=frame_idx,
+                        results=rle_mask_list,
+                    )
 
-                # Then doing the backward propagation (reverse in time)
-                if propagation_direction in ["both", "backward"]:
-                    for outputs in self.predictor.propagate_in_video(
-                        inference_state=inference_state,
-                        start_frame_idx=start_frame_idx,
-                        max_frame_num_to_track=max_frame_num_to_track,
-                        reverse=True,
-                    ):
-                        if session["canceled"]:
-                            return None
-
-                        frame_idx, obj_ids, video_res_masks = outputs
-                        masks_binary = (
-                            (video_res_masks > self.score_thresh)[:, 0].cpu().numpy()
-                        )
-
-                        rle_mask_list = self.__get_rle_mask_list(
-                            object_ids=obj_ids, masks=masks_binary
-                        )
-
-                        yield PropagateDataResponse(
-                            frame_index=frame_idx,
-                            results=rle_mask_list,
-                        )
             except Exception as e:
                 logger.error(f"[MEMORY DEBUG] Exception during propagation: {type(e).__name__}: {e}")
                 self._log_memory_stats()
                 raise
             finally:
-                # Log upon completion (so that e.g. we can see if two propagations happen in parallel).
-                # Using `finally` here to log even when the tracking is aborted with GeneratorExit.
                 logger.warning(f"[MEMORY DEBUG] After propagation:")
                 self._log_memory_stats()
                 logger.info(
@@ -712,6 +781,283 @@ class InferenceAPI:
         session = self.__get_session(request.session_id)
         session["canceled"] = True
         return CancelPorpagateResponse(success=True)
+
+    # ------------------------------------------------------------------ #
+    #  Chunked propagation helpers                                        #
+    # ------------------------------------------------------------------ #
+
+    def _create_chunk_dir(self, cs: ChunkedSessionState, start: int, end: int, label: str) -> Path:
+        """Create a temp dir with symlinks: 00000.jpg -> all_frames/{start:05d}.jpg, etc."""
+        chunk_dir = cs.session_dir / f"chunk_{label}_{start}_{end}"
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+
+        for local_idx, global_idx in enumerate(range(start, end)):
+            src = cs.all_frames_dir / f"{global_idx:05d}.jpg"
+            dst = chunk_dir / f"{local_idx:05d}.jpg"
+            if not dst.exists() and src.exists():
+                os.symlink(src, dst)
+
+        return chunk_dir
+
+    def _cleanup_chunk_dir(self, chunk_dir: Path):
+        """Remove a temporary chunk directory."""
+        try:
+            shutil.rmtree(chunk_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warning(f"[CHUNKED] Failed to clean up {chunk_dir}: {e}")
+
+    def _replay_inputs_for_chunk(
+        self, cs: ChunkedSessionState, inference_state, chunk_start: int, chunk_end: int
+    ):
+        """Replay all stored point_inputs and mask_inputs that fall within [chunk_start, chunk_end)."""
+        # Replay point inputs
+        for obj_id, frames in cs.point_inputs.items():
+            for frame_idx, inp in sorted(frames.items()):
+                if chunk_start <= frame_idx < chunk_end:
+                    local_idx = frame_idx - chunk_start
+                    self.predictor.add_new_points_or_box(
+                        inference_state=inference_state,
+                        frame_idx=local_idx,
+                        obj_id=obj_id,
+                        points=inp["points"],
+                        labels=inp["labels"],
+                        clear_old_points=inp["clear_old_points"],
+                        normalize_coords=False,
+                    )
+
+        # Replay mask inputs
+        for obj_id, frames in cs.mask_inputs.items():
+            for frame_idx, rle_mask in sorted(frames.items()):
+                if chunk_start <= frame_idx < chunk_end:
+                    local_idx = frame_idx - chunk_start
+                    mask = decode_masks(rle_mask)
+                    self.predictor.add_new_mask(
+                        inference_state=inference_state,
+                        frame_idx=local_idx,
+                        obj_id=obj_id,
+                        mask=torch.tensor(mask > 0),
+                    )
+
+    def _extract_boundary_masks(self, inference_state, local_frame_idx):
+        """
+        Extract the predicted mask at a given local frame index for all objects.
+        Returns {obj_id: binary_mask_tensor} for use as boundary seeds.
+        """
+        boundary_masks = {}
+        output_dict_per_obj = inference_state.get("output_dict_per_obj", {})
+        obj_idx_to_id = inference_state.get("obj_idx_to_id", {})
+
+        for obj_idx, obj_output in output_dict_per_obj.items():
+            obj_id = obj_idx_to_id.get(obj_idx, obj_idx)
+            # Check both cond and non-cond outputs for the mask at this frame
+            mask_logits = None
+            for output_key in ["cond_frame_outputs", "non_cond_frame_outputs"]:
+                if local_frame_idx in obj_output.get(output_key, {}):
+                    mask_logits = obj_output[output_key][local_frame_idx].get("pred_masks")
+                    break
+
+            if mask_logits is not None:
+                # mask_logits shape: [1, 1, H_model, W_model] — threshold it
+                binary = (mask_logits > self.score_thresh).squeeze()
+                boundary_masks[obj_id] = binary.cpu()
+
+        return boundary_masks
+
+    def _propagate_chunk(
+        self,
+        cs: ChunkedSessionState,
+        session: Dict,
+        chunk_start: int,
+        chunk_end: int,
+        label: str,
+        seed_masks: Optional[Dict[int, Any]] = None,
+        seed_local_frame: int = 0,
+        propagate_reverse: bool = False,
+        propagate_start_local: Optional[int] = None,
+    ) -> Generator[PropagateDataResponse, None, None]:
+        """
+        Process a single chunk: init_state, seed boundary masks, replay inputs, propagate.
+        Yields PropagateDataResponse with global frame indices.
+        Returns boundary masks from the edge frame for chaining to the next chunk.
+        """
+        chunk_dir = self._create_chunk_dir(cs, chunk_start, chunk_end, label)
+        offload_video_to_cpu = self.device.type in ["mps", "cuda"]
+
+        try:
+            inference_state = self.predictor.init_state(
+                str(chunk_dir),
+                offload_video_to_cpu=offload_video_to_cpu,
+                async_loading_frames=False,
+            )
+
+            # Seed boundary masks from the previous chunk
+            if seed_masks:
+                for obj_id, mask_tensor in seed_masks.items():
+                    self.predictor.add_new_mask(
+                        inference_state=inference_state,
+                        frame_idx=seed_local_frame,
+                        obj_id=obj_id,
+                        mask=mask_tensor,
+                    )
+
+            # Replay user inputs that fall within this chunk's range
+            self._replay_inputs_for_chunk(cs, inference_state, chunk_start, chunk_end)
+
+            # Determine start frame for propagation within this chunk
+            if propagate_start_local is None:
+                propagate_start_local = seed_local_frame
+
+            # Propagate
+            for outputs in self.predictor.propagate_in_video(
+                inference_state=inference_state,
+                start_frame_idx=propagate_start_local,
+                reverse=propagate_reverse,
+            ):
+                if session["canceled"]:
+                    return
+
+                local_idx, obj_ids, video_res_masks = outputs
+                global_idx = local_idx + chunk_start
+                masks_binary = (video_res_masks > self.score_thresh)[:, 0].cpu().numpy()
+                rle_mask_list = self.__get_rle_mask_list(
+                    object_ids=obj_ids, masks=masks_binary
+                )
+                yield PropagateDataResponse(
+                    frame_index=global_idx,
+                    results=rle_mask_list,
+                )
+
+            # Extract boundary masks from the edge of this chunk
+            chunk_len = chunk_end - chunk_start
+            if propagate_reverse:
+                edge_local = 0
+            else:
+                edge_local = chunk_len - 1
+            self._last_boundary_masks = self._extract_boundary_masks(inference_state, edge_local)
+
+            # Cleanup SAM2 state
+            self.predictor.reset_state(inference_state)
+            del inference_state
+
+        finally:
+            self._cleanup_chunk_dir(chunk_dir)
+            if self.device.type == "cuda":
+                torch.cuda.empty_cache()
+            import gc
+            gc.collect()
+
+    def _propagate_chunked(
+        self,
+        session: Dict,
+        session_id: str,
+        start_frame_idx: int,
+    ) -> Generator[PropagateDataResponse, None, None]:
+        """
+        Core chunked propagation logic. Processes the video in chunks,
+        passing boundary masks between chunks to maintain tracking continuity.
+        """
+        cs: ChunkedSessionState = session["chunked_state"]
+        N = cs.num_frames
+        chunk_size = cs.chunk_size
+
+        logger.warning(f"[CHUNKED] Propagating: N={N}, chunk_size={chunk_size}, start_frame={start_frame_idx}")
+        self._log_memory_stats()
+
+        # --- Phase A: Initial chunk (contains the start frame) ---
+        initial_start = max(0, start_frame_idx - chunk_size // 2)
+        initial_end = min(N, initial_start + chunk_size)
+        # Adjust start if end was clamped
+        initial_start = max(0, initial_end - chunk_size)
+        local_start = start_frame_idx - initial_start
+
+        logger.warning(f"[CHUNKED] Phase A: initial chunk [{initial_start}, {initial_end}), local_start={local_start}")
+
+        # Forward pass within initial chunk
+        self._last_boundary_masks = {}
+        for response in self._propagate_chunk(
+            cs, session, initial_start, initial_end,
+            label="init_fwd",
+            propagate_reverse=False,
+            propagate_start_local=local_start,
+        ):
+            yield response
+        if session["canceled"]:
+            return
+        forward_boundary = dict(self._last_boundary_masks)
+
+        # Backward pass within initial chunk
+        self._last_boundary_masks = {}
+        for response in self._propagate_chunk(
+            cs, session, initial_start, initial_end,
+            label="init_bwd",
+            propagate_reverse=True,
+            propagate_start_local=local_start,
+        ):
+            yield response
+        if session["canceled"]:
+            return
+        backward_boundary = dict(self._last_boundary_masks)
+
+        # --- Phase B: Forward continuation chunks ---
+        cursor = initial_end
+        fwd_boundary = forward_boundary
+        chunk_num = 0
+        while cursor < N:
+            if session["canceled"]:
+                return
+            c_start = cursor
+            c_end = min(N, cursor + chunk_size)
+            chunk_num += 1
+
+            logger.warning(f"[CHUNKED] Phase B: forward chunk {chunk_num} [{c_start}, {c_end})")
+
+            self._last_boundary_masks = {}
+            for response in self._propagate_chunk(
+                cs, session, c_start, c_end,
+                label=f"fwd_{chunk_num}",
+                seed_masks=fwd_boundary,
+                seed_local_frame=0,  # Seed at start of chunk (boundary from previous)
+                propagate_reverse=False,
+                propagate_start_local=0,
+            ):
+                yield response
+
+            if session["canceled"]:
+                return
+            fwd_boundary = dict(self._last_boundary_masks)
+            cursor = c_end
+
+        # --- Phase C: Backward continuation chunks ---
+        cursor = initial_start
+        bwd_boundary = backward_boundary
+        chunk_num = 0
+        while cursor > 0:
+            if session["canceled"]:
+                return
+            c_end = cursor
+            c_start = max(0, cursor - chunk_size)
+            chunk_num += 1
+            chunk_len = c_end - c_start
+
+            logger.warning(f"[CHUNKED] Phase C: backward chunk {chunk_num} [{c_start}, {c_end})")
+
+            self._last_boundary_masks = {}
+            for response in self._propagate_chunk(
+                cs, session, c_start, c_end,
+                label=f"bwd_{chunk_num}",
+                seed_masks=bwd_boundary,
+                seed_local_frame=chunk_len - 1,  # Seed at end of chunk (boundary from next)
+                propagate_reverse=True,
+                propagate_start_local=chunk_len - 1,
+            ):
+                yield response
+
+            if session["canceled"]:
+                return
+            bwd_boundary = dict(self._last_boundary_masks)
+            cursor = c_start
+
+        logger.warning(f"[CHUNKED] Propagation complete for session {session_id}")
 
     def __clear_non_cond_outputs(self, inference_state, obj_ids=None):
         """Clear non-conditioning frame outputs to force re-computation during re-propagation."""
@@ -803,21 +1149,25 @@ class InferenceAPI:
 
     def __get_session_stats(self):
         """Get a statistics string for live sessions and their GPU usage."""
-        # print both the session ids and their video frame numbers
-        live_session_strs = [
-            f"'{session_id}' ({session['state']['num_frames']} frames, "
-            f"{len(session['state']['obj_ids'])} objects)"
-            for session_id, session in self.session_states.items()
-        ]
-        session_stats_str = (
-            "Test String Here - -"
-            f"live sessions: [{', '.join(live_session_strs)}], GPU memory: "
-            f"{torch.cuda.memory_allocated() // 1024**2} MiB used and "
-            f"{torch.cuda.memory_reserved() // 1024**2} MiB reserved"
-            f" (max over time: {torch.cuda.max_memory_allocated() // 1024**2} MiB used "
-            f"and {torch.cuda.max_memory_reserved() // 1024**2} MiB reserved)"
-        )
-        return session_stats_str
+        live_session_strs = []
+        for session_id, session in self.session_states.items():
+            if session.get("chunked", False):
+                cs = session["chunked_state"]
+                live_session_strs.append(
+                    f"'{session_id}' (CHUNKED {cs.num_frames} frames, chunk_size={cs.chunk_size})"
+                )
+            else:
+                live_session_strs.append(
+                    f"'{session_id}' ({session['state']['num_frames']} frames, "
+                    f"{len(session['state']['obj_ids'])} objects)"
+                )
+        gpu_stats = ""
+        if torch.cuda.is_available():
+            gpu_stats = (
+                f", GPU memory: {torch.cuda.memory_allocated() // 1024**2} MiB used and "
+                f"{torch.cuda.memory_reserved() // 1024**2} MiB reserved"
+            )
+        return f"live sessions: [{', '.join(live_session_strs)}]{gpu_stats}"
 
     def __clear_session_state(self, session_id: str) -> bool:
         session = self.session_states.pop(session_id, None)
@@ -828,11 +1178,29 @@ class InferenceAPI:
             )
             return False
         else:
-            # Aggressively clean up session memory
             try:
+                # Chunked session cleanup
+                if session.get("chunked", False):
+                    cs: ChunkedSessionState = session["chunked_state"]
+                    # Remove all_frames directory
+                    if cs.all_frames_dir.exists():
+                        shutil.rmtree(cs.all_frames_dir, ignore_errors=True)
+                        logger.info(f"[CHUNKED] Removed all_frames dir for session {session_id}")
+                    # Remove any leftover chunk_* temp dirs
+                    if cs.session_dir.exists():
+                        for chunk_dir in cs.session_dir.glob("chunk_*"):
+                            shutil.rmtree(chunk_dir, ignore_errors=True)
+                    del session
+                    import gc
+                    gc.collect()
+                    if self.device.type == "cuda":
+                        torch.cuda.empty_cache()
+                    logger.info(f"removed chunked session {session_id}; {self.__get_session_stats()}")
+                    return True
+
+                # Normal session cleanup
                 inference_state = session.get("state")
-                if inference_state is not None:
-                    # Clear all cached data structures
+                if inference_state is not None and isinstance(inference_state, dict):
                     for key in ['obj_id_to_frames', 'obj_id_to_idx', 'output_dict_per_obj',
                                 'frames_tracked_per_obj', 'obj_ids', 'obj_idx_to_id']:
                         if key in inference_state:
@@ -841,26 +1209,22 @@ class InferenceAPI:
                             elif isinstance(inference_state[key], list):
                                 inference_state[key].clear()
 
-                    # Clear video frames if stored
                     if 'images' in inference_state:
                         del inference_state['images']
                     if 'video_segments' in inference_state:
                         del inference_state['video_segments']
 
-                # Delete the session completely
                 del session
 
-                # Force Python garbage collection
                 import gc
                 gc.collect()
 
-                # Clean up GPU memory
                 if self.device.type == "cuda":
                     torch.cuda.empty_cache()
                     logger.info(f"GPU memory cleaned for session {session_id}")
 
             except Exception as e:
-                logger.warning(f"Error during aggressive cleanup for session {session_id}: {e}")
+                logger.warning(f"Error during cleanup for session {session_id}: {e}")
 
             logger.info(f"removed session {session_id}; {self.__get_session_stats()}")
             return True

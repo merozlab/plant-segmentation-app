@@ -253,3 +253,38 @@ def get_preset_config(preset_name: str) -> Optional[Dict]:
 def get_all_presets() -> Dict[str, Dict]:
     """Get all available preset configurations."""
     return PRESET_CONFIGS
+
+
+# --- Chunked video processing configuration ---
+
+CHUNK_THRESHOLD = 300       # Frame count above which chunked mode activates
+MIN_CHUNK_SIZE = 50
+MAX_CHUNK_SIZE = 300
+DEFAULT_CHUNK_SIZE = 200
+
+
+def get_chunk_size(width: int, height: int, model_size: str) -> int:
+    """
+    Calculate chunk size that fits in ~60% of available RAM.
+
+    Returns a frame count per chunk, clamped between MIN_CHUNK_SIZE and MAX_CHUNK_SIZE.
+    """
+    import psutil
+
+    available_mb = psutil.virtual_memory().available / (1024 ** 2)
+
+    # Use the model's memory multiplier to estimate per-frame cost
+    config = RESOLUTION_CONFIGS.get(model_size, RESOLUTION_CONFIGS["base_plus"])
+    memory_multiplier = config.get("memory_multiplier", 3.5)
+
+    bytes_per_frame = width * height * 3 * memory_multiplier
+    mb_per_frame = bytes_per_frame / (1024 ** 2)
+
+    if mb_per_frame <= 0:
+        return DEFAULT_CHUNK_SIZE
+
+    # Target 60% of available memory for the chunk
+    target_mb = available_mb * 0.60
+    chunk_size = int(target_mb / mb_per_frame)
+
+    return max(MIN_CHUNK_SIZE, min(chunk_size, MAX_CHUNK_SIZE))

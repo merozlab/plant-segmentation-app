@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM python:3.10-slim
 
 # Environment variables
@@ -6,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=video_app
 ENV FLASK_ENV=production
 
-# Install system requirements
+# Install system requirements + cleanup in same layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libavutil-dev \
@@ -15,11 +16,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libswscale-dev \
     pkg-config \
     build-essential \
-    libffi-dev
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies optimiszed for video processing only
-RUN pip install --upgrade pip setuptools
-RUN pip install \
+# Install Python dependencies with BuildKit cache mount
+# Using --no-cache-dir is redundant with cache mount but keeps image slim
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip setuptools && \
+    pip install \
     # Web framework
     werkzeug==2.2.3 \
     Flask==2.2.3 \
@@ -29,7 +33,7 @@ RUN pip install \
     # Video processing
     av>=13.0.0 \
     eva-decord>=0.6.1 \
-    opencv-python>=4.7.0 \
+    opencv-python-headless>=4.7.0 \
     # Scientific computing (no PyTorch needed)
     numpy>=1.24.4 \
     scipy>=1.14.1 \
@@ -43,10 +47,13 @@ RUN pip install \
     imagesize>=1.4.1 \
     iopath>=0.1.10
 
+# Remove build tools no longer needed (saves ~200MB)
+RUN apt-get purge -y build-essential && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # Make app directory
 RUN mkdir -p ${APP_ROOT}/server
 
-# Copy necessary files for video processing
+# Copy app code last (changes most often)
 COPY demo/backend/server/*.py ${APP_ROOT}/server/
 
 WORKDIR ${APP_ROOT}/server
